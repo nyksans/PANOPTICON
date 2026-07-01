@@ -1,13 +1,46 @@
-from fastapi import APIRouter, HTTPException, Depends
+"""
+AI routes — chat, processing jobs, report generation.
+Delegates to LLMService for real Gemini responses (or graceful mock fallback).
+"""
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import time
+import uuid
+import logging
 
+from app.db.base import get_db
+from app.models.case import Case
+from app.models.evidence import Evidence
 from app.core.security import get_current_user_id
+from app.core.config import settings
+
+logger = logging.getLogger("panopticon.ai")
+
+# ---------------------------------------------------------------------------
+# Singleton LLM service — initialized once on first import
+# ---------------------------------------------------------------------------
+from ai.services.llm_service import LLMService  # noqa: E402 — path on PYTHONPATH
+
+_llm_service: Optional[LLMService] = None
+
+
+def _get_llm() -> LLMService:
+    global _llm_service
+    if _llm_service is None:
+        _llm_service = LLMService(api_key=settings.GEMINI_API_KEY)
+    return _llm_service
+
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
 
 class ChatRequest(BaseModel):
     case_id: str
@@ -35,89 +68,116 @@ class ProcessingJobResponse(BaseModel):
     estimated_completion: Optional[str] = None
 
 
-def _generate_response(message: str, case_id: str) -> str:
-    lower = message.lower()
-    if "backpack" in lower or "bag" in lower:
-        return (
-            "Based on frame-by-frame analysis of evidence **ev-001** (Station Camera 4):\n\n"
-            "**Suspect Alpha** made contact with the victim's backpack at **14:32:28**, "
-            "handling it for approximately 12 seconds.\n\nSuspect Beta remained 2.3 meters "
-            "away in a lookout position. Confidence: **92%**."
-        )
-    if "weapon" in lower or "gun" in lower or "firearm" in lower:
-        return (
-            "Weapon detection by YOLOv8:\n\n"
-            "**First appearance:** 14:32:14 — object consistent with a handgun detected "
-            "in Suspect Alpha's right hand. Confidence: **89%**.\n\n"
-            "Weapon visible in 14 frames across a 47-second window."
-        )
-    if "movement" in lower or "track" in lower or "route" in lower:
-        return (
-            "Cross-camera tracking reconstruction:\n\n"
-            "**14:28:14** → South Entrance (CAM-STN-002, 91%)\n"
-            "**14:29:02** → Ticketing area – stationary 1m 46s\n"
-            "**14:31:48** → Platform 4 arrival (CAM-STN-004, 95%)\n"
-            "**14:33:01** → North exit – suspects flee (97%)\n\n"
-            "Total tracked: **4 minutes 47 seconds** across 2 cameras."
-        )
-    if "timeline" in lower or "reconstruct" in lower:
-        return (
-            "AI-reconstructed forensic timeline for case **PAN-2026-0047**:\n\n"
-            "14:28:14 — Suspects enter station\n"
-            "14:32:14 — Robbery initiated\n"
-            "14:32:28 — Victim's property taken\n"
-            "14:33:01 — Suspects flee\n\n"
-            "Full timeline available in Investigation workspace."
-        )
-    return (
-        f"I have analyzed the evidence for the requested case.\n\n"
-        "Based on AI processing across available camera feeds, I found relevant findings. "
-        "Confidence scoring and cross-camera re-identification results are available. "
-        "Would you like a detailed timeline, suspect movement trace, or object interaction report?"
-    )
-
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest, user_id: str = Depends(get_current_user_id)):
-    start = time.time()
-    content = _generate_response(payload.message, payload.case_id)
-    elapsed = int((time.time() - start) * 1000) + 1200  # simulate processing
+async def chat(
+    payload: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    start_ms = int(time.time() * 1000)
 
-    import uuid
+    # Build case context for the LLM
+    case_context: dict = {"case_number": "N/A", "title": "", "evidence_count": 0, "suspect_count": 0, "confidence": 0}
+    evidence_context: List[dict] = []
+
+    case_result = await db.execute(select(Case).where(Case.id == payload.case_id))
+    case = case_result.scalar_one_or_none()
+    if case:
+        case_context = {
+            "case_number": case.case_number,
+            "title": case.title,
+            "confidence": case.confidence_score,
+            "evidence_count": 0,
+            "suspect_count": 0,
+        }
+        # Fetch evidence summaries for context
+        ev_result = await db.execute(select(Evidence).where(Evidence.case_id == case.id).limit(10))
+        evidences = ev_result.scalars().all()
+        case_context["evidence_count"] = len(evidences)
+        evidence_context = [
+            {
+                "id": e.id,
+                "synopsis": (e.ai_results or {}).get("synopsis", e.original_name),
+                "confidence": (e.ai_results or {}).get("confidence", 0),
+            }
+            for e in evidences
+        ]
+
+    llm = _get_llm()
+    response = await llm.query(
+        message=payload.message,
+        case_context=case_context,
+        evidence_context=evidence_context,
+    )
+
+    elapsed = int(time.time() * 1000) - start_ms
+
+    # Surface relevant evidence refs from message keywords
+    evidence_refs = []
+    for ev in evidence_context:
+        if any(kw in payload.message.lower() for kw in ["evidence", "footage", "camera", "video"]):
+            evidence_refs.append(ev["id"])
+
     return ChatResponse(
         id=str(uuid.uuid4()),
-        content=content,
-        timestamp=datetime.utcnow().isoformat(),
-        confidence=round(80 + (hash(payload.message) % 15), 1),
+        content=response["content"],
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        confidence=float(response.get("confidence", 80)),
         processing_time=elapsed,
-        evidence_refs=["ev-001", "ev-002"],
-        suspect_refs=["sus-001"] if "suspect" in payload.message.lower() else [],
+        evidence_refs=evidence_refs[:3],
+        suspect_refs=[],
     )
 
 
 @router.post("/process/{evidence_id}", response_model=ProcessingJobResponse, status_code=202)
-async def start_processing(evidence_id: str, user_id: str = Depends(get_current_user_id)):
-    import uuid
+async def start_processing(
+    evidence_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    ev_result = await db.execute(select(Evidence).where(Evidence.id == evidence_id))
+    ev = ev_result.scalar_one_or_none()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+
+    ev.status = "processing"
     job_id = str(uuid.uuid4())
+    await db.flush()
+
+    # Dispatch Celery task for async AI processing
+    try:
+        from app.tasks.video_processing import process_evidence_task
+        task = process_evidence_task.delay(evidence_id, job_id)
+        logger.info(f"Dispatched Celery task {task.id} for evidence {evidence_id}, job {job_id}")
+    except Exception as exc:
+        logger.warning(f"Celery dispatch failed ({exc}). Evidence marked as processing but no worker running.")
+
     return ProcessingJobResponse(
         job_id=job_id,
         evidence_id=evidence_id,
         status="queued",
         progress=0,
-        started_at=datetime.utcnow().isoformat(),
+        started_at=datetime.now(timezone.utc).isoformat(),
         estimated_completion=None,
     )
 
 
 @router.get("/process/{job_id}/status")
-async def get_processing_status(job_id: str, user_id: str = Depends(get_current_user_id)):
-    # Mock progress — in production, query Celery task
+async def get_processing_status(
+    job_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    # TODO: query Celery AsyncResult for real status
     return {
         "job_id": job_id,
         "status": "running",
         "progress": 65,
         "current_step": "Person re-identification",
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -125,13 +185,39 @@ async def get_processing_status(job_id: str, user_id: str = Depends(get_current_
 async def generate_report(
     case_id: str,
     report_type: str = "comprehensive",
+    db: AsyncSession = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    import uuid
+    case_result = await db.execute(select(Case).where(Case.id == case_id))
+    case = case_result.scalar_one_or_none()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    ev_result = await db.execute(select(Evidence).where(Evidence.case_id == case_id))
+    evidences = ev_result.scalars().all()
+
+    case_context = {
+        "case_number": case.case_number,
+        "title": case.title,
+        "confidence": case.confidence_score,
+    }
+    evidence_summaries = [
+        {
+            "id": e.id,
+            "synopsis": (e.ai_results or {}).get("synopsis", e.original_name),
+        }
+        for e in evidences
+    ]
+
+    llm = _get_llm()
+    report_content = await llm.generate_report(case_context, evidence_summaries, report_type)
+
+    report_id = str(uuid.uuid4())
     return {
-        "report_id": str(uuid.uuid4()),
+        "report_id": report_id,
         "case_id": case_id,
         "type": report_type,
-        "status": "generating",
-        "estimated_seconds": 45,
+        "status": "completed",
+        "content": report_content,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }

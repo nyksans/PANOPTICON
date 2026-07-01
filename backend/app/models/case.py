@@ -48,6 +48,7 @@ class Case(Base):
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    evidence: Mapped[list] = relationship("Evidence", back_populates="case", lazy="dynamic")
-    suspects: Mapped[list] = relationship("Suspect", back_populates="case", lazy="dynamic")
-    timeline_events: Mapped[list] = relationship("TimelineEvent", back_populates="case", lazy="dynamic")
+    evidence: Mapped[list["Evidence"]] = relationship("Evidence", back_populates="case")
+    suspects: Mapped[list["Suspect"]] = relationship("Suspect", back_populates="case")
+    timeline_events: Mapped[list["TimelineEvent"]] = relationship("TimelineEvent", back_populates="case")
+

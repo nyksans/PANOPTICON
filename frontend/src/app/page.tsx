@@ -9,6 +9,8 @@ export default function RootPage() {
   const { isAuthenticated } = useAuthStore();
 
   useEffect(() => {
+    // No hydration wait — directly check auth state from Zustand
+    // (Zustand persist loads synchronously on first render)
     if (isAuthenticated) {
       router.replace('/dashboard');
     } else {
@@ -16,12 +18,5 @@ export default function RootPage() {
     }
   }, [isAuthenticated, router]);
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-        <p className="text-xs text-muted-foreground">Initializing PANOPTICON...</p>
-      </div>
-    </div>
-  );
+  return null; // No spinner, instant redirect
 }

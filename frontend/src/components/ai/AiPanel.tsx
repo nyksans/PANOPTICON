@@ -10,7 +10,6 @@ import {
   Film,
   Users,
   Clock,
-  ChevronRight,
   Loader2,
   Copy,
   ThumbsUp,
@@ -18,8 +17,8 @@ import {
   RotateCcw,
   Maximize2,
 } from 'lucide-react';
-import { mockChatMessages } from '@/lib/mockData';
 import { useUIStore } from '@/store/uiStore';
+import { aiApi } from '@/lib/api';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import type { ChatMessage } from '@/types';
 
@@ -33,18 +32,20 @@ const suggestedQueries = [
 ];
 
 export function AiPanel() {
-  const { setAiPanelOpen } = useUIStore();
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages);
+  const { setAiPanelOpen, selectedCaseId } = useUIStore();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Use a stable session ID per panel open
+  const sessionId = useRef(`session-${Date.now()}`);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim();
     if (!text || isTyping) return;
 
@@ -59,20 +60,31 @@ export function AiPanel() {
     setInput('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const caseId = selectedCaseId ?? 'case-001';
+      const result = await aiApi.chat(caseId, text, sessionId.current);
       const aiMsg: ChatMessage = {
-        id: `msg-${Date.now() + 1}`,
+        id: result.id,
         role: 'assistant',
-        content: generateMockResponse(text),
-        timestamp: new Date().toISOString(),
-        confidence: Math.floor(Math.random() * 20) + 75,
-        processingTime: Math.floor(Math.random() * 1500) + 800,
-        evidenceRefs: ['ev-001', 'ev-002'],
+        content: result.content,
+        timestamp: result.timestamp,
+        confidence: result.confidence ?? undefined,
+        processingTime: result.processing_time ?? undefined,
+        evidenceRefs: result.evidence_refs ?? [],
+        suspectRefs: result.suspect_refs ?? [],
       };
       setMessages((prev) => [...prev, aiMsg]);
+    } catch {
+      const errMsg: ChatMessage = {
+        id: `err-${Date.now()}`,
+        role: 'assistant',
+        content: 'I was unable to process your request. Please check that the backend is running and try again.',
+        timestamp: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    } finally {
       setIsTyping(false);
-    }, 1800);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -359,16 +371,4 @@ function MessageBubble({ message: msg }: { message: ChatMessage }) {
   );
 }
 
-function generateMockResponse(query: string): string {
-  const lower = query.toLowerCase();
-  if (lower.includes('weapon') || lower.includes('gun') || lower.includes('firearm')) {
-    return 'Based on my analysis of the available footage:\n\n**First appearance:** At **14:32:14** in CAM-STN-004, Suspect Alpha is observed with an object consistent with a firearm in their right hand.\n\nThe object is partially concealed under their jacket prior to this timestamp. Object detection confidence: **89%**.\n\nNo weapon is visible in earlier footage or on Suspect Beta at any point.';
-  }
-  if (lower.includes('movement') || lower.includes('move') || lower.includes('track')) {
-    return 'Cross-camera tracking reconstructed:\n\n**14:28:14** → South Entrance (CAM-STN-002)\n**14:29:02** → Ticketing Area – stationary 1m46s\n**14:30:48** → Moving toward Platform 4\n**14:31:48** → Platform 4 Entrance (CAM-STN-004)\n**14:33:01** → North Exit (CAM-STN-004)\n\nTotal tracked duration: **4 minutes 47 seconds** across 2 cameras.';
-  }
-  if (lower.includes('suspect') || lower.includes('person') || lower.includes('who')) {
-    return 'I identified **2 suspects** in the processed footage:\n\n**Suspect Alpha** — Primary actor. Male, ~30-35 yrs, dark jacket, baseball cap. Confidence: **94%**.\n\n**Suspect Beta** — Lookout. Male, ~25-30 yrs, grey hoodie, blue jeans. Confidence: **88%**.\n\nBoth suspects moved together throughout. No additional unknown persons were detected in restricted areas during the incident window.';
-  }
-  return `Based on analysis of the current case evidence, I have processed your query: **"${query}"**\n\nCross-referencing against ${Math.floor(Math.random() * 10) + 5} evidence items. Relevant findings have been identified. Would you like me to generate a detailed timeline or suspect movement report based on this query?`;
-}
+// End of AiPanel module

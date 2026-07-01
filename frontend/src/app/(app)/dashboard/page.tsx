@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Shield,
   Film,
@@ -16,8 +17,9 @@ import { StatsCard } from '@/components/dashboard/StatsCard';
 import { RecentCases } from '@/components/dashboard/RecentCases';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 import { SystemHealth } from '@/components/dashboard/SystemHealth';
-import { mockCases, mockDashboardStats, mockAlerts } from '@/lib/mockData';
+import { dashboardApi, casesApi, toCaseFrontend } from '@/lib/api';
 import { formatTimestamp } from '@/lib/utils';
+import type { Case } from '@/types';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -33,9 +35,29 @@ const itemVariants = {
 };
 
 export default function DashboardPage() {
-  const stats = mockDashboardStats;
-  const activeCases = mockCases.filter((c) => c.status === 'active');
-  const criticalAlerts = mockAlerts.filter((a) => a.severity === 'critical' && !a.read);
+  const { data: statsData } = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => dashboardApi.stats(),
+    refetchInterval: 30_000,
+  });
+
+  const { data: casesData } = useQuery({
+    queryKey: ['cases', 'dashboard'],
+    queryFn: () => casesApi.list({ page: 1, page_size: 10, status: 'active' }),
+  });
+
+  const { data: alertsData } = useQuery({
+    queryKey: ['dashboard-alerts'],
+    queryFn: () => dashboardApi.alerts(),
+    refetchInterval: 60_000,
+  });
+
+  const stats = statsData?.data ?? {
+    activeCases: 0, totalEvidence: 0, processingQueue: 0, alertsToday: 0,
+    suspectsTracked: 0, reportsGenerated: 0, aiAccuracy: 0, systemHealth: 'operational' as const,
+  };
+  const activeCases: Case[] = (casesData?.data ?? []).map(toCaseFrontend);
+  const criticalAlerts = (alertsData?.data ?? []).filter((a) => a.severity === 'critical' && !a.read);
 
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">

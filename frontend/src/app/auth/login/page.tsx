@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Shield, Lock, User, AlertCircle, Zap } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
+import { authApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export default function LoginPage() {
@@ -23,21 +24,31 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    login(
-      {
-        id: 'user-001',
-        email,
-        name: 'Det. Sarah Kim',
-        role: 'investigator',
-        badge: 'DET-4821',
-        department: 'Homicide Division',
-        createdAt: '2026-01-01T00:00:00Z',
-        lastActive: new Date().toISOString(),
-      },
-      'mock-jwt-token-' + Date.now()
-    );
-    router.push('/dashboard');
+    try {
+      const result = await authApi.login(email, password);
+      login(
+        {
+          id: result.user.id,
+          email: result.user.email,
+          name: result.user.name,
+          role: result.user.role as import('@/types').UserRole,
+          badge: result.user.badge,
+          department: result.user.department,
+          createdAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+        },
+        result.access_token,
+      );
+      router.push('/dashboard');
+    } catch (err: unknown) {
+      const msg =
+        typeof err === 'object' && err !== null && 'message' in err
+          ? (err as { message: string }).message
+          : 'Authentication failed. Please check your credentials.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const demoLogin = () => {

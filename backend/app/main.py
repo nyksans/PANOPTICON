@@ -4,10 +4,20 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
+import sys
 import logging
+
+# ---------------------------------------------------------------------------
+# Ensure the project root (parent of /backend) is on sys.path so that
+# `from ai.services.llm_service import LLMService` resolves correctly.
+# ---------------------------------------------------------------------------
+_project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from app.core.config import settings
 from app.api.routes import auth, cases, evidence, ai, dashboard
+
 
 # Logging
 logging.basicConfig(
@@ -22,6 +32,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting PANOPTICON API v{settings.APP_VERSION}")
     os.makedirs(settings.LOCAL_STORAGE_PATH, exist_ok=True)
     os.makedirs(settings.CHROMA_PERSIST_DIR, exist_ok=True)
+
+    # Auto-create tables in development (Alembic handles production migrations)
+    if settings.ENVIRONMENT in ("development", "test"):
+        try:
+            from app.db.base import engine, Base
+            # Import all models so Base.metadata is populated
+            from app.models import case, evidence as evidence_model  # noqa: F401
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables verified/created")
+        except Exception as exc:
+            logger.warning(f"Could not auto-create tables (DB may not be ready): {exc}")
+
     yield
     logger.info("PANOPTICON API shutting down")
 

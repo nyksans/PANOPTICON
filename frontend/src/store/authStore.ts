@@ -4,8 +4,10 @@ import { immer } from 'zustand/middleware/immer';
 import type { User, AuthState } from '@/types';
 
 interface AuthStore extends AuthState {
+  _hasHydrated: boolean;
   login: (user: User, token: string) => void;
   logout: () => void;
+  clearSession: () => void;
   updateUser: (updates: Partial<User>) => void;
   setLoading: (loading: boolean) => void;
 }
@@ -17,6 +19,7 @@ export const useAuthStore = create<AuthStore>()(
       token: null,
       isAuthenticated: false,
       isLoading: false,
+      _hasHydrated: false,
 
       login: (user, token) =>
         set((state) => {
@@ -27,6 +30,13 @@ export const useAuthStore = create<AuthStore>()(
         }),
 
       logout: () =>
+        set((state) => {
+          state.user = null;
+          state.token = null;
+          state.isAuthenticated = false;
+        }),
+
+      clearSession: () =>
         set((state) => {
           state.user = null;
           state.token = null;
@@ -52,6 +62,9 @@ export const useAuthStore = create<AuthStore>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => () => {
+        useAuthStore.setState({ _hasHydrated: true });
+      },
     }
   )
 );

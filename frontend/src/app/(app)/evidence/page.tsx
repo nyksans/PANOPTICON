@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Upload,
   Search,
@@ -24,8 +25,11 @@ import {
   Tag,
   Download,
   MoreVertical,
+  RefreshCw,
+  AlertCircle,
 } from 'lucide-react';
 import { mockEvidence } from '@/lib/mockData';
+import { evidenceApi, casesApi, toCaseFrontend, toEvidenceFrontend } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ConfidenceBadge } from '@/components/ui/ConfidenceBadge';
 import { cn, formatFileSize, formatDuration, formatTimestamp, formatRelativeTime, getEvidenceTypeIcon } from '@/lib/utils';
@@ -48,29 +52,86 @@ const typeFilters: { value: EvidenceType | 'all'; label: string; icon: React.Ele
 ];
 
 export default function EvidencePage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<EvidenceType | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
 
-  const onDrop = useCallback((files: File[]) => {
-    if (!files.length) return;
-    setUploading(true);
-    setUploadProgress(0);
-    // Simulate upload
-    const interval = setInterval(() => {
-      setUploadProgress((p) => {
-        if (p >= 100) {
-          clearInterval(interval);
-          setTimeout(() => setUploading(false), 500);
-          return 100;
+  // Fetch evidence from backend, fall back to mock data on error
+  const { data: evidenceData, isError: evidenceError, isLoading: evidenceLoading } = useQuery({
+    queryKey: ['evidence', typeFilter, statusFilter],
+    queryFn: () =>
+      evidenceApi.list({
+        file_type: typeFilter !== 'all' ? typeFilter : undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        page: 1,
+      }),
+    retry: 1,
+  });
+
+  // Fetch cases for the upload case selector
+  const { data: casesData } = useQuery({
+    queryKey: ['cases', 'evidence-upload'],
+    queryFn: () => casesApi.list({ page: 1, page_size: 50 }),
+    retry: 1,
+  });
+
+  const availableCases = useMemo(
+    () => (casesData?.data ?? []).map(toCaseFrontend),
+    [casesData],
+  );
+
+  // Use backend data if available, otherwise fall back to mock data
+  const allEvidence: Evidence[] = useMemo(() => {
+    if (evidenceData?.data && evidenceData.data.length > 0) {
+      return evidenceData.data.map(toEvidenceFrontend);
+    }
+    return mockEvidence;
+  }, [evidenceData]);
+
+  const onDrop = useCallback(
+    async (files: File[]) => {
+      if (!files.length) return;
+
+      const caseId = selectedCaseId || availableCases[0]?.id;
+      if (!caseId) {
+        setUploadError('No case available. Create a case first.');
+        return;
+      }
+
+      setUploading(true);
+      setUploadProgress(0);
+      setUploadError(null);
+
+      try {
+        for (const file of files) {
+          await evidenceApi.upload(
+            caseId,
+            file,
+            {},
+            (pct) => setUploadProgress(pct),
+          );
         }
-        return p + 10;
-      });
-    }, 200);
-  }, []);
+        // Refresh evidence list after successful upload
+        queryClient.invalidateQueries({ queryKey: ['evidence'] });
+      } catch (err: unknown) {
+        const msg =
+          typeof err === 'object' && err !== null && 'message' in err
+            ? (err as { message: string }).message
+            : 'Upload failed. Please try again.';
+        setUploadError(msg);
+      } finally {
+        setUploading(false);
+        setUploadProgress(0);
+      }
+    },
+    [selectedCaseId, availableCases, queryClient],
+  );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -82,7 +143,7 @@ export default function EvidencePage() {
   });
 
   const filtered = useMemo(() => {
-    let list = mockEvidence;
+    let list = allEvidence;
     if (typeFilter !== 'all') list = list.filter((e) => e.type === typeFilter);
     if (statusFilter !== 'all') list = list.filter((e) => e.status === statusFilter);
     if (search.trim()) {
@@ -95,7 +156,7 @@ export default function EvidencePage() {
       );
     }
     return list;
-  }, [search, typeFilter, statusFilter]);
+  }, [search, typeFilter, statusFilter, allEvidence]);
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -117,7 +178,10 @@ export default function EvidencePage() {
               </div>
               <h1 className="text-2xl font-bold tracking-tight">Evidence Management</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {filtered.length} items · {mockEvidence.filter(e => e.status === 'processed').length} processed
+                {evidenceLoading ? 'Loading...' : `${filtered.length} items · ${allEvidence.filter(e => e.status === 'processed').length} processed`}
+                {evidenceError && (
+                  <span className="text-warning/80 ml-2 text-xs">(showing demo data — backend unavailable)</span>
+                )}
               </p>
             </div>
           </motion.div>
@@ -128,6 +192,39 @@ export default function EvidencePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
           >
+            {/* Case selector for upload */}
+            {availableCases.length > 0 && (
+              <div className="flex items-center gap-3 mb-3">
+                <label className="text-xs text-muted-foreground shrink-0">Upload to case:</label>
+                <select
+                  value={selectedCaseId || availableCases[0]?.id}
+                  onChange={(e) => setSelectedCaseId(e.target.value)}
+                  className="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-foreground focus:outline-none focus:border-accent/50 cursor-pointer max-w-xs"
+                >
+                  {availableCases.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-[#0D1526]">
+                      {c.caseNumber} — {c.title.slice(0, 40)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Upload error */}
+            {uploadError && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 p-3 rounded-lg bg-danger/10 border border-danger/25 mb-3"
+              >
+                <AlertCircle className="w-4 h-4 text-danger shrink-0" />
+                <p className="text-xs text-danger">{uploadError}</p>
+                <button onClick={() => setUploadError(null)} className="ml-auto text-danger/60 hover:text-danger">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </motion.div>
+            )}
+
             <div
               {...getRootProps()}
               className={cn(

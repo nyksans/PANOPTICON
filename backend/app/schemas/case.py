@@ -58,6 +58,7 @@ class CaseResponse(BaseModel):
     assigned_to: List[str]
     created_at: datetime
     updated_at: datetime
+    evidence_count: int = 0
 
     model_config = {"from_attributes": True}
 

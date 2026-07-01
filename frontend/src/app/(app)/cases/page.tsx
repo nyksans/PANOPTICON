@@ -2,19 +2,19 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Plus,
   Search,
-  Filter,
   LayoutGrid,
   List,
   FolderOpen,
-  ChevronDown,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { CaseCard } from '@/components/cases/CaseCard';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { mockCases } from '@/lib/mockData';
+import { CaseCardSkeleton } from '@/components/ui/LoadingSkeleton';
+import { casesApi, toCaseFrontend } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { Case, CaseStatus, CasePriority } from '@/types';
 
@@ -52,37 +52,43 @@ const priorityOrder: Record<string, number> = {
 };
 
 export default function CasesPage() {
+  const queryClient = useQueryClient();
   const [view, setView] = useState<ViewMode>('grid');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<CaseStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<CasePriority | 'all'>('all');
   const [sortBy, setSortBy] = useState<SortField>('updatedAt');
-  const [showFilters, setShowFilters] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  const { data: casesData, isLoading } = useQuery({
+    queryKey: ['cases', statusFilter, priorityFilter, search],
+    queryFn: () =>
+      casesApi.list({
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+        search: search.trim() || undefined,
+        page_size: 100,
+      }),
+    staleTime: 15_000,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof casesApi.create>[0]) => casesApi.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+      toast.success('Case created successfully');
+      setShowCreateModal(false);
+    },
+    onError: () => toast.error('Failed to create case'),
+  });
+
+  const allCases: Case[] = useMemo(
+    () => (casesData?.data ?? []).map(toCaseFrontend),
+    [casesData],
+  );
+
   const filtered = useMemo(() => {
-    let list = [...mockCases];
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (c) =>
-          c.title.toLowerCase().includes(q) ||
-          c.caseNumber.toLowerCase().includes(q) ||
-          c.location.toLowerCase().includes(q) ||
-          c.description.toLowerCase().includes(q) ||
-          c.tags.some((t) => t.toLowerCase().includes(q))
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      list = list.filter((c) => c.status === statusFilter);
-    }
-
-    if (priorityFilter !== 'all') {
-      list = list.filter((c) => c.priority === priorityFilter);
-    }
-
+    let list = [...allCases];
     list.sort((a, b) => {
       switch (sortBy) {
         case 'updatedAt':
@@ -97,9 +103,8 @@ export default function CasesPage() {
           return 0;
       }
     });
-
     return list;
-  }, [search, statusFilter, priorityFilter, sortBy]);
+  }, [allCases, sortBy]);
 
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -118,7 +123,7 @@ export default function CasesPage() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Investigations</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {filtered.length} of {mockCases.length} cases
+            {filtered.length} of {casesData?.total ?? 0} cases
           </p>
         </div>
 
@@ -212,7 +217,13 @@ export default function CasesPage() {
       </motion.div>
 
       {/* Cases display */}
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CaseCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState
           icon={FolderOpen}
           title="No cases found"
@@ -263,14 +274,26 @@ export default function CasesPage() {
 
       {/* Create Case Modal */}
       {showCreateModal && (
-        <CreateCaseModal onClose={() => setShowCreateModal(false)} />
+        <CreateCaseModal
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={(payload) => createMutation.mutate(payload)}
+          isSubmitting={createMutation.isPending}
+        />
       )}
     </div>
   );
 }
 
 // Create Case Modal
-function CreateCaseModal({ onClose }: { onClose: () => void }) {
+function CreateCaseModal({
+  onClose,
+  onSubmit,
+  isSubmitting,
+}: {
+  onClose: () => void;
+  onSubmit: (payload: import('@/types').CreateCasePayload) => void;
+  isSubmitting: boolean;
+}) {
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -279,6 +302,18 @@ function CreateCaseModal({ onClose }: { onClose: () => void }) {
     location: '',
     incidentDate: '',
   });
+
+  const handleCreate = () => {
+    if (!form.title || !form.location || !form.incidentDate) return;
+    onSubmit({
+      title: form.title,
+      description: form.description,
+      priority: form.priority as import('@/types').CasePriority,
+      category: form.category,
+      location: form.location,
+      incidentDate: new Date(form.incidentDate).toISOString(),
+    });
+  };
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -394,11 +429,11 @@ function CreateCaseModal({ onClose }: { onClose: () => void }) {
             Cancel
           </button>
           <button
-            onClick={onClose}
-            disabled={!form.title || !form.location}
+            onClick={handleCreate}
+            disabled={!form.title || !form.location || !form.incidentDate || isSubmitting}
             className="px-4 py-2 text-sm font-medium bg-accent text-accent-foreground rounded-lg hover:bg-accent-glow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Create Investigation
+            {isSubmitting ? 'Creating...' : 'Create Investigation'}
           </button>
         </div>
       </motion.div>

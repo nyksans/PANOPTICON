@@ -130,7 +130,20 @@ class ObjectDetector:
                 self.model = YOLO(model_path)
                 logger.info(f"YOLOv8 loaded from {model_path}")
             else:
-                logger.warning(f"YOLOv8 model not found at {model_path}. Using mock detections.")
+                # Auto-download yolov8n.pt if model file is missing
+                logger.info(f"Model not found at {model_path}. Attempting auto-download of yolov8n.pt...")
+                try:
+                    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+                    download_model = YOLO("yolov8n.pt")  # downloads to cwd
+                    import shutil
+                    default_path = "yolov8n.pt"
+                    if os.path.exists(default_path):
+                        shutil.move(default_path, model_path)
+                        logger.info(f"Downloaded yolov8n.pt to {model_path}")
+                    self.model = YOLO(model_path)
+                    logger.info(f"YOLOv8 loaded after auto-download from {model_path}")
+                except Exception as dl_exc:
+                    logger.warning(f"Auto-download failed: {dl_exc}. Using mock detections.")
         except ImportError:
             logger.warning("ultralytics not installed. Using mock detections.")
 
@@ -268,6 +281,76 @@ class ReIDModule:
         self.gallery[track_id] = embedding
 
 
+class SceneMapper:
+    """
+    Maps 2D detection bounding boxes to approximate 3D world coordinates.
+
+    Without real camera calibration, this uses heuristic ground-plane projection:
+    - bbox bottom-center -> foot position on ground
+    - horizontal screen position -> world X
+    - vertical screen position (depth proxy) -> world Z
+    - Objects are placed at Y=0.25 (marker height), persons at Y=0.5
+    """
+
+    def __init__(self, scene_bounds: float = 12.0):
+        """
+        Args:
+            scene_bounds: Half-extent of the 3D scene in world units.
+                          Scene spans [-scene_bounds, +scene_bounds] on X and Z.
+        """
+        self.scene_bounds = scene_bounds
+
+    def bbox_to_scene(
+        self,
+        bbox: "BoundingBox",
+        camera_offset: Optional[Dict[str, float]] = None,
+    ) -> List[float]:
+        """Convert a normalized bbox to a 3D scene position [x, y, z]."""
+        # Bottom-center of bbox is the "foot" position
+        screen_x = bbox.x + bbox.width / 2.0  # 0..1
+        screen_y_bottom = bbox.y + bbox.height  # 0..1, bottom of bbox
+
+        # Map screen X -> world X: left=-bounds, right=+bounds
+        world_x = (screen_x - 0.5) * 2.0 * self.scene_bounds
+
+        # Map vertical position to depth: top of screen = far (-Z), bottom = near (+Z)
+        world_z = (screen_y_bottom - 0.5) * 2.0 * self.scene_bounds
+
+        # Y position: ground-level objects at 0.25, persons at 0.5
+        world_y = 0.5 if bbox.height > 0.3 else 0.25
+
+        # Apply camera offset if provided
+        if camera_offset:
+            world_x += camera_offset.get("x", 0)
+            world_z += camera_offset.get("z", 0)
+
+        return [round(world_x, 2), round(world_y, 2), round(world_z, 2)]
+
+    def tracks_to_scene(
+        self,
+        tracks: Dict[str, "PersonTrack"],
+        camera_offset: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, List[List[float]]]:
+        """Compute average scene positions for each person track."""
+        result: Dict[str, List[List[float]]] = {}
+        for track_id, track in tracks.items():
+            positions = []
+            for det in track.detections:
+                pos = self.bbox_to_scene(det.bbox, camera_offset)
+                positions.append(pos)
+            if positions:
+                # Average position for the track
+                avg = [
+                    round(sum(p[0] for p in positions) / len(positions), 2),
+                    round(sum(p[1] for p in positions) / len(positions), 2),
+                    round(sum(p[2] for p in positions) / len(positions), 2),
+                ]
+                result[track_id] = [avg]
+            else:
+                result[track_id] = []
+        return result
+
+
 class VideoProcessingPipeline:
     """
     Full AI processing pipeline for a single evidence video.
@@ -277,23 +360,42 @@ class VideoProcessingPipeline:
         self,
         yolo_model_path: str = "./ai/models/yolov8n.pt",
         reid_model_path: str = "./ai/models/fastreid_baseline.pth",
+        confidence_threshold: float = 0.65,
         detection_threshold: float = 0.65,
         reid_threshold: float = 0.78,
         frame_interval: float = 0.5,
+        gpu_enabled: bool = False,
     ):
+        # Support both param names for backwards compat
+        threshold = detection_threshold if detection_threshold != 0.65 else confidence_threshold
+        self.gpu_enabled = gpu_enabled
+        self.output_base_dir = "./storage/processing"
         self.extractor = FrameExtractor(interval_seconds=frame_interval)
-        self.detector = ObjectDetector(yolo_model_path, detection_threshold)
+        self.detector = ObjectDetector(yolo_model_path, threshold)
         self.tracker = PersonTracker()
         self.reid = ReIDModule(reid_model_path, reid_threshold)
+        self.scene_mapper = SceneMapper()
 
     def process(
         self,
         video_path: str,
-        evidence_id: str,
-        output_dir: str,
+        evidence_id: Optional[str] = None,
+        output_dir: Optional[str] = None,
         progress_callback=None,
     ) -> Dict[str, Any]:
-        """Run full pipeline and return structured results."""
+        """Run full pipeline and return structured results.
+
+        Can be called as:
+            pipeline.process(video_path)                              # minimal
+            pipeline.process(video_path, evidence_id, output_dir)     # explicit
+            pipeline.process(video_path, progress_callback=fn)        # celery style
+        """
+        # Resolve defaults
+        if evidence_id is None:
+            evidence_id = os.path.splitext(os.path.basename(video_path))[0]
+        if output_dir is None:
+            output_dir = os.path.join(self.output_base_dir, evidence_id)
+
         logger.info(f"Starting pipeline for evidence {evidence_id}")
         result = {
             "evidence_id": evidence_id,
@@ -330,9 +432,13 @@ class VideoProcessingPipeline:
 
                 if progress_callback:
                     pct = int((i + 1) / total * 90)
-                    progress_callback(pct)
+                    try:
+                        progress_callback(pct, "Detection & tracking")
+                    except TypeError:
+                        progress_callback(pct)
 
-            # Build persons summary
+            # Build persons summary with scene positions
+            track_scene_positions = self.scene_mapper.tracks_to_scene(self.tracker.tracks)
             persons = []
             for track_id, track in self.tracker.tracks.items():
                 if track.detections:
@@ -343,6 +449,7 @@ class VideoProcessingPipeline:
                         "first_seen": track.first_seen,
                         "last_seen": track.last_seen,
                         "frame_count": len(track.detections),
+                        "scene_positions": track_scene_positions.get(track_id, []),
                     })
 
             # Build objects summary
@@ -363,6 +470,27 @@ class VideoProcessingPipeline:
                     "significance": "high",
                 })
 
+            # Build detailed detections with scene positions (sampled to limit size)
+            detailed_detections = []
+            max_detections = 200  # limit to keep JSONB manageable
+            step = max(1, len(all_detections) // max_detections)
+            for det in all_detections[::step]:
+                scene_pos = self.scene_mapper.bbox_to_scene(det.bbox)
+                detailed_detections.append({
+                    "label": det.label,
+                    "confidence": round(det.confidence, 3),
+                    "bbox": {
+                        "x": round(det.bbox.x, 4),
+                        "y": round(det.bbox.y, 4),
+                        "width": round(det.bbox.width, 4),
+                        "height": round(det.bbox.height, 4),
+                    },
+                    "frame_number": det.frame_number,
+                    "timestamp": round(det.timestamp, 2),
+                    "track_id": det.track_id,
+                    "scene_position": scene_pos,
+                })
+
             # Compute overall confidence
             confidences = [p["confidence"] for p in persons]
             overall_confidence = round(sum(confidences) / len(confidences), 1) if confidences else 75.0
@@ -373,12 +501,16 @@ class VideoProcessingPipeline:
                 "objects": objects,
                 "persons": persons,
                 "events": events,
+                "detections": detailed_detections,
                 "synopsis": self._generate_synopsis(persons, objects, events),
                 "confidence": overall_confidence,
             })
 
             if progress_callback:
-                progress_callback(100)
+                try:
+                    progress_callback(100, "Complete")
+                except TypeError:
+                    progress_callback(100)
 
             logger.info(f"Pipeline complete for {evidence_id}: {len(persons)} persons, {len(objects)} object types")
 
