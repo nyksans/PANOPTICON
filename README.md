@@ -228,16 +228,6 @@ docs/
     └── crime-scene-3d.png
 ```
 
-Then add screenshots here.
-
-```md
-![Dashboard](docs/screenshots/dashboard.png)
-
-![Investigation](docs/screenshots/investigation.png)
-
-![3D Crime Scene](docs/screenshots/crime-scene-3d.png)
-```
-
 ---
 
 # Environment Variables
