@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Film,
@@ -20,10 +21,11 @@ import {
   CheckCircle,
   AlertTriangle,
 } from 'lucide-react';
-import { mockCases, mockEvidence, mockSuspects, mockTimeline } from '@/lib/mockData';
+import { casesApi, evidenceApi, toCaseFrontend, toEvidenceFrontend } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ConfidenceBadge } from '@/components/ui/ConfidenceBadge';
 import { cn, formatTimestamp, formatRelativeTime, getPriorityColor, formatFileSize, formatDuration } from '@/lib/utils';
+import type { Case, Evidence } from '@/types';
 
 type Tab = 'overview' | 'evidence' | 'suspects' | 'timeline' | 'reports';
 
@@ -32,10 +34,37 @@ export default function CaseDetailPage() {
   const caseId = params.id as string;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
-  const caseData = mockCases.find((c) => c.id === caseId);
-  const caseEvidence = mockEvidence.filter((e) => e.caseId === caseId);
-  const caseSuspects = mockSuspects.filter((s) => s.caseId === caseId);
-  const caseTimeline = mockTimeline.filter((t) => t.caseId === caseId);
+  // Load case from backend
+  const { data: caseApiData, isLoading } = useQuery({
+    queryKey: ['case', caseId],
+    queryFn: () => casesApi.get(caseId),
+    retry: 1,
+  });
+
+  // Load evidence for this case
+  const { data: evidenceData } = useQuery({
+    queryKey: ['evidence', 'case', caseId],
+    queryFn: () => evidenceApi.list({ case_id: caseId }),
+    enabled: !!caseId,
+    retry: 1,
+  });
+
+  const caseData: Case | null = caseApiData ? toCaseFrontend(caseApiData) : null;
+  const caseEvidence: Evidence[] = evidenceData?.data
+    ? evidenceData.data.map(toEvidenceFrontend)
+    : [];
+  
+  // Suspects and timeline not yet implemented in backend
+  const caseSuspects: any[] = [];
+  const caseTimeline: any[] = [];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   if (!caseData) {
     return (
@@ -48,8 +77,8 @@ export default function CaseDetailPage() {
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'evidence', label: 'Evidence', count: caseEvidence.length },
-    { id: 'suspects', label: 'Suspects', count: caseSuspects.length },
-    { id: 'timeline', label: 'Timeline', count: caseTimeline.length },
+    { id: 'suspects', label: 'Suspects', count: 0 }, // Backend route not yet implemented
+    { id: 'timeline', label: 'Timeline', count: 0 }, // Backend route not yet implemented
     { id: 'reports', label: 'Reports' },
   ];
 

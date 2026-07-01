@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import {
   Search,
   Bell,
@@ -16,16 +17,25 @@ import {
 import { formatRelativeTime } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
 import { useAuthStore } from '@/store/authStore';
-import { mockAlerts } from '@/lib/mockData';
+import { dashboardApi } from '@/lib/api';
 import { cn, initials } from '@/lib/utils';
 
 export function Header() {
-  const { unreadCount, setGlobalSearchOpen, setAiPanelOpen, aiPanelOpen, markAllRead } = useUIStore();
+  const { setGlobalSearchOpen, setAiPanelOpen, aiPanelOpen } = useUIStore();
   const { user, logout } = useAuthStore();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
-  const recentAlerts = mockAlerts.slice(0, 5);
+  // Load alerts from backend
+  const { data: alertsData } = useQuery({
+    queryKey: ['dashboard-alerts'],
+    queryFn: () => dashboardApi.alerts(),
+    refetchInterval: 60_000,
+    retry: 1,
+  });
+
+  const recentAlerts = (alertsData?.data ?? []).slice(0, 5);
+  const unreadCount = recentAlerts.filter(a => !a.read).length;
 
   return (
     <header className="h-14 border-b border-border bg-[#080d1a]/90 backdrop-blur-sm flex items-center justify-between px-4 gap-4 shrink-0 z-20">
@@ -99,16 +109,17 @@ export function Header() {
                 <div className="flex items-center justify-between p-4 border-b border-border">
                   <span className="text-sm font-semibold">Notifications</span>
                   {unreadCount > 0 && (
-                    <button
-                      onClick={markAllRead}
-                      className="text-xs text-accent hover:text-accent-glow transition-colors"
-                    >
-                      Mark all read
-                    </button>
+                    <span className="text-xs text-muted-foreground">{unreadCount} unread</span>
                   )}
                 </div>
                 <div className="max-h-80 overflow-y-auto">
-                  {recentAlerts.map((alert) => (
+                  {recentAlerts.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <Bell className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">No notifications</p>
+                    </div>
+                  ) : (
+                    recentAlerts.map((alert) => (
                     <div
                       key={alert.id}
                       className={cn(
@@ -133,7 +144,8 @@ export function Header() {
                         </p>
                       </div>
                     </div>
-                  ))}
+                  ))
+                  )}
                 </div>
                 <div className="p-3">
                   <button className="w-full text-center text-xs text-accent hover:text-accent-glow transition-colors py-1">
