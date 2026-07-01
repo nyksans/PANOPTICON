@@ -39,15 +39,15 @@ export default function LoginPage() {
         },
         result.access_token,
       );
+      // Immediate redirect without waiting
       router.push('/dashboard');
     } catch (err: unknown) {
+      setLoading(false);
       const msg =
         typeof err === 'object' && err !== null && 'message' in err
           ? (err as { message: string }).message
           : 'Authentication failed. Please check your credentials.';
       setError(msg);
-    } finally {
-      setLoading(false);
     }
   };
 

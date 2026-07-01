@@ -22,7 +22,7 @@ class ApiClient {
   constructor() {
     this.instance = axios.create({
       baseURL: `${BASE_URL}/api/v1`,
-      timeout: 30000,
+      timeout: 10000, // Reduced from 30s to 10s for faster failure
       headers: { 'Content-Type': 'application/json' },
     });
 
@@ -40,19 +40,16 @@ class ApiClient {
       (error) => Promise.reject(error),
     );
 
-    // Only clear the persisted session when the dedicated /auth/me endpoint
-    // returns 401 — meaning the token is definitively invalid/expired.
-    // We do NOT hard-redirect here; the (app)/layout guard handles navigation.
+    // Simplified response interceptor - only clear session on 401 from any authenticated route
     this.instance.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        const requestUrl = error.config?.url ?? '';
-        const isAuthMe = requestUrl.includes('/auth/me');
-
-        if (error.response?.status === 401 && isAuthMe && typeof window !== 'undefined') {
-          useAuthStore.getState().clearSession();
-          // Let React Router / (app)/layout handle the redirect to /auth/login
-          // rather than forcing a hard page reload.
+        if (error.response?.status === 401 && typeof window !== 'undefined') {
+          const token = useAuthStore.getState().token;
+          if (token) {
+            // Only clear if we had a token (was authenticated)
+            useAuthStore.getState().clearSession();
+          }
         }
         const apiError: ApiError = {
           message:
