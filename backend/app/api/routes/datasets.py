@@ -1,333 +1,306 @@
 """
-PANOPTICON Datasets API
-Exposes MOT17, Market-1501, and COCO dataset capabilities via REST endpoints
+PANOPTICON Datasets & EDA API
+Full REST API for dataset management, EDA, statistics, reports, download, and preprocessing.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, Dict, Any
+from __future__ import annotations
+
+import json
 import logging
+import os
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi.responses import FileResponse, HTMLResponse
+from pydantic import BaseModel
+
+# Ensure project root on path
+_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 
 logger = logging.getLogger("panopticon.api.datasets")
 
 router = APIRouter(prefix="/api/v1/datasets", tags=["datasets"])
 
+# ── Pydantic models ────────────────────────────────────────────────────────
 
-# Mock implementations for dataset endpoints
-# (In production, would integrate with DatasetIntegrationService)
+
+class DownloadRequest(BaseModel):
+    dataset: str
+    force: bool = False
+
+
+class EDARequest(BaseModel):
+    dataset: str
+
+
+class PreprocessRequest(BaseModel):
+    dataset: str
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+DATASETS_ROOT = Path(_root) / "ai" / "datasets"
+EDA_ROOT      = Path(_root) / "ai" / "eda"
+REPORTS_ROOT  = Path(_root) / "ai" / "reports"
+
+DATASET_INFO = {
+    "coco": {
+        "name": "COCO 2017",
+        "purpose": "Object Detection — 80 categories, 330K images, 2.5M instances",
+        "size_gb": 1.2,
+        "url": "https://cocodataset.org/",
+        "benchmark_metrics": ["AP", "AP50", "AP75"],
+        "use_cases": ["Object detection", "Weapon detection", "Scene understanding"],
+    },
+    "mot17": {
+        "name": "MOT17",
+        "purpose": "Multi-Object Tracking — 14 sequences, pedestrian tracking",
+        "size_gb": 5.7,
+        "url": "https://motchallenge.net/data/MOT17/",
+        "benchmark_metrics": ["MOTA", "MOTP", "IDF1", "ID Switches"],
+        "use_cases": ["Pedestrian tracking", "Track validation", "CCTV analysis"],
+    },
+    "market1501": {
+        "name": "Market-1501",
+        "purpose": "Person Re-ID — 1,501 identities across 6 cameras",
+        "size_gb": 0.6,
+        "url": "https://zheng-lab.cecs.anu.edu.au/Project/project_reid.html",
+        "benchmark_metrics": ["Rank-1", "mAP", "CMC"],
+        "use_cases": ["Cross-camera tracking", "Suspect re-identification"],
+    },
+    "scannet": {
+        "name": "ScanNet v2",
+        "purpose": "3D Scene Reconstruction — 707 scenes with RGB-D frames and meshes",
+        "size_gb": 2.5,
+        "url": "http://www.scan-net.org/",
+        "benchmark_metrics": ["mIoU", "Scene Completion"],
+        "use_cases": ["3D reconstruction", "Scene understanding", "Camera calibration"],
+    },
+}
+
+
+def _get_dataset_status(name: str) -> str:
+    try:
+        from ai.datasets.registry import get_manager
+        mgr = get_manager(name)
+        return mgr.status()
+    except Exception:
+        return "unknown"
+
+
+def _get_dataset_meta(name: str) -> Dict[str, Any]:
+    try:
+        from ai.datasets.registry import get_manager
+        mgr = get_manager(name)
+        return mgr.cache()
+    except Exception:
+        return {}
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────────
+
+
+@router.get("/")
+async def list_datasets() -> Dict[str, Any]:
+    """List all datasets with status and metadata."""
+    result = {}
+    for name, info in DATASET_INFO.items():
+        meta = _get_dataset_meta(name)
+        result[name] = {
+            **info,
+            "status": _get_dataset_status(name),
+            "meta": meta,
+        }
+    return {"datasets": result, "count": len(result)}
+
 
 @router.get("/status")
-async def get_datasets_status() -> Dict[str, Any]:
-    """
-    Get current dataset integration status.
-    
-    Returns:
-    - MOT17: Multi-object tracking dataset status
-    - Market-1501: Person re-identification dataset status
-    - COCO: Object detection dataset status
-    """
+async def get_all_status() -> Dict[str, str]:
+    """Get download/readiness status for all datasets."""
+    return {name: _get_dataset_status(name) for name in DATASET_INFO}
+
+
+@router.get("/{dataset}/status")
+async def get_dataset_status(dataset: str) -> Dict[str, Any]:
+    if dataset not in DATASET_INFO:
+        raise HTTPException(404, f"Unknown dataset: {dataset}")
+    meta = _get_dataset_meta(dataset)
     return {
-        "timestamp": "2026-01-15T10:30:00Z",
-        "datasets": {
-            "MOT17": {
-                "status": "available",
-                "description": "Multi-Object Tracking Challenge 2017",
-                "sequences": 14,
-                "use_case": "Validates pedestrian tracking in CCTV sequences",
-                "sequences_available": [
-                    "MOT17-02-FRCNN", "MOT17-04-FRCNN", "MOT17-05-FRCNN",
-                    "MOT17-09-FRCNN", "MOT17-10-FRCNN", "MOT17-11-FRCNN",
-                    "MOT17-13-FRCNN", "MOT17-01-FRCNN", "MOT17-03-FRCNN",
-                    "MOT17-06-FRCNN", "MOT17-07-FRCNN", "MOT17-08-FRCNN",
-                    "MOT17-12-FRCNN", "MOT17-14-FRCNN"
-                ]
-            },
-            "Market-1501": {
-                "status": "available",
-                "description": "Person Re-Identification Dataset",
-                "identities": 1501,
-                "use_case": "Cross-camera person tracking for suspect identification",
-                "statistics": {
-                    "total_images": 32668,
-                    "cameras": 6,
-                    "cross_camera_pairs": 21175,
-                    "training_set": 12936,
-                    "test_set": 19732
-                }
-            },
-            "COCO": {
-                "status": "available",
-                "description": "Common Objects in Context",
-                "categories": 80,
-                "use_case": "General object detection and scene understanding",
-                "statistics": {
-                    "total_images": 330000,
-                    "total_instances": 2500000,
-                    "instances_per_image": 7.7,
-                    "common_categories": [
-                        "person", "car", "dog", "cat", "backpack",
-                        "bottle", "handbag", "knife", "gun"
-                    ]
-                }
-            }
-        },
-        "cctv_support": {
-            "enabled": True,
-            "description": "Real CCTV footage can be processed using dataset-trained models",
-            "capabilities": [
-                "MOT17-trained multi-object tracking",
-                "Market-1501-based cross-camera re-identification",
-                "COCO-enhanced object detection (including weapons)",
-                "Real-time forensic analysis with dataset-backed confidence"
-            ]
-        }
+        "dataset": dataset,
+        "status": _get_dataset_status(dataset),
+        "info": DATASET_INFO[dataset],
+        "meta": meta,
     }
 
 
-@router.get("/mot17/sequences")
-async def list_mot17_sequences() -> Dict[str, Any]:
-    """List available MOT17 tracking sequences"""
-    return {
-        "dataset": "MOT17",
-        "description": "Multi-Object Tracking Challenge 2017",
-        "purpose": "Pedestrian tracking validation in CCTV-like scenarios",
-        "sequences": {
-            "training": [
-                {
-                    "id": "MOT17-02",
-                    "detector": "FRCNN",
-                    "frames": 600,
-                    "fps": 30,
-                    "pedestrians": 12,
-                    "duration_seconds": 20
-                },
-                {
-                    "id": "MOT17-04",
-                    "detector": "FRCNN",
-                    "frames": 1050,
-                    "fps": 30,
-                    "pedestrians": 31,
-                    "duration_seconds": 35
-                },
-                {
-                    "id": "MOT17-05",
-                    "detector": "FRCNN",
-                    "frames": 837,
-                    "fps": 30,
-                    "pedestrians": 30,
-                    "duration_seconds": 27
-                }
-            ]
-        },
-        "metrics_available": [
-            "MOTA (Multiple Object Tracking Accuracy)",
-            "MOTP (Multiple Object Tracking Precision)",
-            "IDF1 (ID F-score)",
-            "ID Switches"
-        ]
-    }
+@router.post("/download")
+async def download_dataset(req: DownloadRequest, background_tasks: BackgroundTasks) -> Dict[str, Any]:
+    """Trigger dataset download in background (Celery task)."""
+    if req.dataset not in DATASET_INFO and req.dataset != "all":
+        raise HTTPException(422, f"Unknown dataset: {req.dataset}")
+    try:
+        from app.tasks.dataset_tasks import download_dataset as _task, download_all_datasets
+        if req.dataset == "all":
+            task = download_all_datasets.delay(force=req.force)
+        else:
+            task = _task.delay(req.dataset, force=req.force)
+        return {"task_id": task.id, "status": "queued", "dataset": req.dataset}
+    except Exception as e:
+        # Celery not running — run synchronously in background thread
+        import threading
+        from ai.datasets.registry import run_pipeline
+        result_holder: Dict = {}
+
+        def _run():
+            try:
+                result_holder["result"] = run_pipeline(req.dataset, force=req.force)
+            except Exception as ex:
+                result_holder["error"] = str(ex)
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        return {"task_id": "sync", "status": "started", "dataset": req.dataset,
+                "note": "Running synchronously (Celery not available)"}
 
 
-@router.get("/mot17/validate")
-async def validate_tracker_mot17(sequence: str = Query("MOT17-02")) -> Dict[str, Any]:
-    """Validate tracker against MOT17 ground truth"""
-    return {
-        "sequence": sequence,
-        "validation_status": "completed",
-        "metrics": {
-            "mota": 77.45,
-            "motp": 82.13,
-            "idf1": 83.21,
-            "id_switches": 12,
-            "precision": 94.2,
-            "recall": 81.3,
-            "ground_truth_objects": 1847,
-            "detected_objects": 1650,
-            "false_positives": 95
-        },
-        "verdict": "High-confidence tracking. Suitable for forensic timeline generation.",
-        "timestamp": "2026-01-15T10:35:00Z"
-    }
+@router.post("/download/all")
+async def download_all() -> Dict[str, Any]:
+    """Trigger download of all datasets."""
+    try:
+        from app.tasks.dataset_tasks import download_all_datasets
+        task = download_all_datasets.delay()
+        return {"task_id": task.id, "status": "queued"}
+    except Exception:
+        return {"status": "started", "note": "Celery unavailable — use individual /download endpoints"}
 
 
-@router.get("/market1501/validate")
-async def validate_reid_market1501() -> Dict[str, Any]:
-    """Validate re-identification against Market-1501"""
-    return {
-        "dataset": "Market-1501",
-        "validation_status": "completed",
-        "metrics": {
-            "total_identities": 1501,
-            "identities_tested": 750,
-            "rank_1_accuracy": 92.45,
-            "map_score": 0.8734,
-            "cmc_curve": [92.45, 96.12, 97.23, 98.01, 98.34],
-            "cross_camera_accuracy": 89.67,
-            "same_camera_accuracy": 98.23
-        },
-        "findings": {
-            "cross_camera_matches": 673,
-            "correct_matches": 602,
-            "false_positives": 71,
-            "consistency": "High cross-camera identity persistence"
-        },
-        "verdict": "Excellent cross-camera tracking. Recommended for suspect re-identification.",
-        "timestamp": "2026-01-15T10:35:00Z"
-    }
+@router.post("/eda")
+async def run_eda(req: EDARequest) -> Dict[str, Any]:
+    """Trigger EDA for a dataset (Celery task)."""
+    if req.dataset not in DATASET_INFO and req.dataset != "all":
+        raise HTTPException(422, f"Unknown dataset: {req.dataset}")
+    try:
+        from app.tasks.dataset_tasks import run_eda as _task, run_all_eda
+        if req.dataset == "all":
+            task = run_all_eda.delay()
+        else:
+            task = _task.delay(req.dataset)
+        return {"task_id": task.id, "status": "queued", "dataset": req.dataset}
+    except Exception:
+        # Synchronous fallback
+        import threading
+        from ai.eda.pipeline import EDA_RUNNERS
+
+        def _run():
+            runner = EDA_RUNNERS.get(req.dataset)
+            if runner:
+                runner()
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        return {"task_id": "sync", "status": "started", "dataset": req.dataset}
 
 
-@router.get("/coco/validate")
-async def validate_detection_coco() -> Dict[str, Any]:
-    """Validate object detection against COCO"""
-    return {
-        "dataset": "COCO",
-        "validation_status": "completed",
-        "metrics": {
-            "total_categories": 80,
-            "categories_tested": 25,
-            "mean_ap": 0.754,
-            "ap_50": 0.921,
-            "ap_75": 0.834,
-            "detections_made": 4523,
-            "ground_truth_objects": 4821,
-            "false_positives": 127
-        },
-        "category_performance": {
-            "person": {"ap": 0.89, "count": 1245},
-            "backpack": {"ap": 0.76, "count": 203},
-            "knife": {"ap": 0.68, "count": 18},
-            "gun": {"ap": 0.71, "count": 12},
-            "bottle": {"ap": 0.82, "count": 156},
-            "car": {"ap": 0.93, "count": 645}
-        },
-        "verdict": "Strong general detection. Weapon detection confidence moderate.",
-        "timestamp": "2026-01-15T10:35:00Z"
-    }
+@router.post("/preprocess")
+async def preprocess(req: PreprocessRequest) -> Dict[str, Any]:
+    """Trigger preprocessing for a dataset."""
+    try:
+        from app.tasks.dataset_tasks import preprocess_dataset
+        task = preprocess_dataset.delay(req.dataset)
+        return {"task_id": task.id, "status": "queued", "dataset": req.dataset}
+    except Exception:
+        import threading
+        from ai.preprocessing.pipeline import run_preprocessing
+
+        def _run():
+            run_preprocessing(req.dataset)
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        return {"task_id": "sync", "status": "started", "dataset": req.dataset}
 
 
-@router.get("/report")
-async def generate_dataset_report() -> Dict[str, Any]:
-    """Generate comprehensive dataset integration report"""
-    return {
-        "timestamp": "2026-01-15T10:40:00Z",
-        "title": "PANOPTICON Dataset Integration Report",
-        "summary": {
-            "datasets_integrated": 3,
-            "total_sequences": 14,
-            "total_identities": 1501,
-            "total_categories": 80,
-            "cctv_ready": True
-        },
-        "dataset_breakdown": {
-            "MOT17": {
-                "purpose": "Multi-object pedestrian tracking in CCTV sequences",
-                "capabilities": [
-                    "14 video sequences with ground truth",
-                    "Dense frame-level annotations",
-                    "MOTA, MOTP, IDF1 metrics",
-                    "Real-time tracker validation"
-                ],
-                "forensic_applications": [
-                    "Validate ByteTrack consistency",
-                    "Benchmark tracking accuracy",
-                    "Test crowded scene handling",
-                    "Verify ID persistence across occlusions"
-                ]
-            },
-            "Market-1501": {
-                "purpose": "Cross-camera person re-identification",
-                "capabilities": [
-                    "1,501 pedestrian identities",
-                    "6-camera network views",
-                    "32,668 gallery images",
-                    "Rank-1 accuracy and mAP metrics"
-                ],
-                "forensic_applications": [
-                    "Match suspects across camera network",
-                    "Track individuals through blind spots",
-                    "Validate cross-camera consistency",
-                    "Generate suspect movement timelines"
-                ]
-            },
-            "COCO": {
-                "purpose": "General object detection and scene understanding",
-                "capabilities": [
-                    "80 object categories",
-                    "2.5M annotated instances",
-                    "Instance segmentation masks",
-                    "Context-aware detection"
-                ],
-                "forensic_applications": [
-                    "Detect weapons and dangerous objects",
-                    "Scene context analysis",
-                    "Object inventory and tracking",
-                    "Automated threat detection"
-                ]
-            }
-        },
-        "integration_benefits": [
-            "High-confidence tracker validation",
-            "Cross-dataset consistency checking",
-            "Forensic accuracy benchmarking",
-            "CCTV-ready real-world deployment",
-            "Evidence-backed confidence scoring"
-        ],
-        "recommended_workflows": [
-            "1. Process CCTV footage with MOT17-validated tracker",
-            "2. Apply Market-1501 re-ID for cross-camera tracking",
-            "3. Run COCO detection for object and weapon identification",
-            "4. Correlate detections across 3D reconstruction",
-            "5. Generate forensic timeline with confidence scores"
-        ]
-    }
+@router.get("/statistics/{dataset}")
+async def get_statistics(dataset: str) -> Dict[str, Any]:
+    """Return EDA statistics for a dataset."""
+    eda_dir = EDA_ROOT / dataset
+    report_file = eda_dir / "EDA_Report.json"
+    if not report_file.exists():
+        # Generate on-the-fly
+        try:
+            from ai.eda.pipeline import EDA_RUNNERS
+            runner = EDA_RUNNERS.get(dataset)
+            if runner is None:
+                raise HTTPException(404, f"No EDA runner for {dataset}")
+            result = runner()
+            return {"dataset": dataset, "report": result}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(500, f"EDA failed: {e}")
+    return {"dataset": dataset, "report": json.loads(report_file.read_text())}
 
 
-@router.get("/cctv-demo")
-async def get_cctv_demo_info() -> Dict[str, Any]:
-    """Get CCTV demonstration capabilities and sample data"""
-    return {
-        "title": "PANOPTICON CCTV Demonstration",
-        "description": "Real CCTV footage processing using dataset-trained models",
-        "datasets_applied": ["MOT17", "Market-1501", "COCO"],
-        "capabilities": {
-            "real_time_tracking": {
-                "model": "ByteTrack (MOT17-trained)",
-                "description": "Real-time multi-object tracking in CCTV feeds",
-                "performance": "30 fps on CPU, 60+ fps on GPU"
-            },
-            "cross_camera_reid": {
-                "model": "FastReID (Market-1501-trained)",
-                "description": "Identify and track suspects across camera network",
-                "performance": "89.7% cross-camera accuracy"
-            },
-            "object_detection": {
-                "model": "YOLOv8 (COCO-trained)",
-                "description": "Detect persons, weapons, objects in scene",
-                "categories": 80,
-                "weapon_detection": "knife, gun, etc."
-            }
-        },
-        "sample_outputs": {
-            "tracking": {
-                "track_id": "TRK-0001",
-                "person_label": "Suspect α",
-                "camera_detections": ["CAM-01", "CAM-03", "CAM-05"],
-                "confidence": 0.92,
-                "cross_camera_matches": ["CAM-01@14:32", "CAM-03@14:34", "CAM-05@14:36"]
-            },
-            "detection": {
-                "objects": [
-                    {"label": "person", "confidence": 0.94},
-                    {"label": "backpack", "confidence": 0.87},
-                    {"label": "knife", "confidence": 0.71}
-                ]
-            },
-            "timeline": {
-                "events": [
-                    "14:32:14 - Suspect α detected in CAM-01",
-                    "14:32:28 - Backpack identified in tracking",
-                    "14:32:45 - Cross-camera re-ID match (CAM-03)",
-                    "14:33:01 - Suspect exits via north exit (CAM-05)"
-                ]
-            }
-        }
-    }
+@router.get("/reports/{dataset}/html", response_class=HTMLResponse)
+async def get_html_report(dataset: str) -> str:
+    """Serve HTML EDA report for a dataset."""
+    report_file = EDA_ROOT / dataset / "EDA_Report.html"
+    if not report_file.exists():
+        raise HTTPException(404, f"HTML report not found for {dataset}. Run EDA first.")
+    return report_file.read_text(encoding="utf-8")
+
+
+@router.get("/reports/{dataset}/json")
+async def get_json_report(dataset: str) -> Dict[str, Any]:
+    report_file = EDA_ROOT / dataset / "EDA_Report.json"
+    if not report_file.exists():
+        raise HTTPException(404, f"JSON report not found for {dataset}. Run EDA first.")
+    return json.loads(report_file.read_text())
+
+
+@router.get("/reports/{dataset}/csv")
+async def download_csv_report(dataset: str) -> FileResponse:
+    csv_file = EDA_ROOT / dataset / "Statistics.csv"
+    if not csv_file.exists():
+        raise HTTPException(404, f"CSV not found for {dataset}. Run EDA first.")
+    return FileResponse(str(csv_file), media_type="text/csv",
+                        filename=f"{dataset}_statistics.csv")
+
+
+@router.get("/reports/summary")
+async def get_summary() -> Dict[str, Any]:
+    summary_file = REPORTS_ROOT / "Summary.json"
+    if not summary_file.exists():
+        return {"message": "No summary yet. Run /eda with dataset=all first."}
+    return json.loads(summary_file.read_text())
+
+
+@router.get("/task/{task_id}")
+async def get_task_status(task_id: str) -> Dict[str, Any]:
+    """Poll Celery task progress."""
+    if task_id == "sync":
+        return {"task_id": task_id, "status": "RUNNING", "pct": 50}
+    try:
+        from app.celery_app import celery_app
+        result = celery_app.AsyncResult(task_id)
+        response: Dict[str, Any] = {"task_id": task_id, "status": result.status}
+        if result.status == "PROGRESS" and isinstance(result.info, dict):
+            response.update(result.info)
+        elif result.ready():
+            response["result"] = result.get() if result.successful() else str(result.info)
+        return response
+    except Exception as e:
+        return {"task_id": task_id, "status": "UNKNOWN", "error": str(e)}
+
+
+@router.get("/plots/{dataset}/{filename}")
+async def get_plot(dataset: str, filename: str) -> FileResponse:
+    """Serve a plot PNG."""
+    plot_file = EDA_ROOT / dataset / "plots" / filename
+    if not plot_file.exists():
+        raise HTTPException(404, f"Plot not found: {filename}")
+    return FileResponse(str(plot_file), media_type="image/png")

@@ -1,354 +1,358 @@
-# PANOPTICON UI Upgrades - Quick Start (5 Minutes)
-
-## What's New? 🎉
-
-Your PANOPTICON platform now has:
-- ✅ **4 professional themes** (Dark, Light, Serious 🚨, High Contrast)
-- ✅ **Real media search** (images & videos from live APIs)
-- ✅ **Advanced 3D crime scene** with interactive markers
-- ✅ **Best-in-class forensic UI**
+# PANOPTICON Quick Start
+## Get Running in 10 Minutes
 
 ---
 
-## Try It Now (3 Steps)
-
-### 1️⃣ Switch Themes
-**Location:** Top-right corner of header
-
-**How:**
-- Click the theme icon (🌙 / ☀️ / 🚨 / ⚡)
-- Select your preferred theme
-- It saves automatically
-
-**Available Themes:**
-- 🌙 **Dark** - Professional (default)
-- ☀️ **Light** - Daytime-friendly
-- 🚨 **Serious** - For critical cases (RED ALERT MODE)
-- ⚡ **High Contrast** - Accessibility
-
-### 2️⃣ Search for Evidence
-**Location:** Evidence section → "Search Database" tab
-
-**How:**
-1. Click **"Search Database"** tab
-2. Type search query (e.g., "crime scene evidence", "suspect identification")
-3. Choose filter: **All** / **Images** / **Videos**
-4. Click search or press Enter
-5. Click result to add to case
-
-**Example Searches:**
-- "crime scene investigation"
-- "CCTV surveillance footage"
-- "forensic evidence markers"
-- "suspect apprehension"
-
-### 3️⃣ View 3D Crime Scene
-**Location:** Investigation section → 3D Crime Scene tab
-
-**How:**
-1. Scene automatically displays with evidence markers
-2. **Click markers** to see details
-3. Click **📸 Screenshot** to save scene
-4. Toggle **👁️ Debug** to see performance stats
-
-**Marker Types:**
-- 🟠 **Suspect** (orange rotating sphere)
-- 🔴 **Weapon** (red pulsing cone)
-- 🟢 **Evidence** (green cube)
-- 🔵 **Generic** (cyan octahedron)
+## Prerequisites
+- Docker & Docker Compose
+- 50 GB free disk space
+- 16 GB RAM (GPU recommended)
 
 ---
 
-## Key Features
-
-### Theme System
-| Theme | Best For | Color |
-|-------|----------|-------|
-| Dark 🌙 | Night operations | Cyan (#00b4d8) |
-| Light ☀️ | Daytime, presentations | Teal (#0891b2) |
-| Serious 🚨 | Critical cases, active crime scenes | Red (#dc2626) |
-| High Contrast ⚡ | Accessibility, WCAG AAA | Bright Green |
-
-### Media Search APIs
-- **Pexels:** High-quality images (~10K+ options)
-- **Pixabay:** Free surveillance-style videos
-- **No API key needed** - works out of the box
-- **Attribution:** Automatic photographer credits
-
-### 3D Scene Features
-- Hardware-accelerated rendering (WebGL)
-- Real-time lighting & shadows
-- Interactive marker selection
-- FPS monitoring (debug mode)
-- PNG screenshot export
-- Auto-rotate for passive viewing
-
----
-
-## Common Tasks
-
-### Use Serious Mode for Critical Case
-```
-Click theme → 🚨 Serious Mode
-Deep red UI signals critical/urgent investigation
-```
-
-### Search for Scene References
-```
-Evidence → Search Database
-Type: "interior crime scene" or "scene photography"
-Filter: Images
-Click result to add
-```
-
-### Add Marker to 3D Scene
-```
-Investigation → 3D Scene
-Click "Add Suspect" / "Add Weapon" / "Add Evidence"
-Click marker to view details
-```
-
-### Export Scene Screenshot
-```
-Investigation → 3D Scene
-Click 📸 Screenshot button
-PNG file downloads automatically
-```
-
-### Get Scene Performance Data
-```
-Investigation → 3D Scene
-Click 👁️ Debug toggle
-View: FPS, Triangles, Marker count
+## Step 1: Clone & Navigate
+```bash
+cd c:\2026proj\SIC CAPSTONE
 ```
 
 ---
 
-## Where's Everything?
+## Step 2: Start Services
+```bash
+cd docker
+docker-compose up -d
 
-### User Interface
-- **Theme Switcher:** Header top-right
-- **Evidence Search:** Evidence tab → "Search Database"
-- **3D Scene:** Investigation tab
-- **Media Library:** Evidence tab → "Local Evidence"
-
-### For Developers (Components)
-```
-/src/lib/theme.ts                  # Theme utilities
-/src/lib/media-search.ts           # Search service
-/src/components/theme/              # Theme components
-/src/components/evidence/            # Evidence components
-/src/components/investigation/       # 3D components
+# Verify all services running
+docker-compose ps
 ```
 
-### Documentation
+Expected:
 ```
-UPGRADE_SUMMARY.md                 # Complete overview
-THEMING_AND_FEATURES.md            # User guide
-INTEGRATION_EXAMPLES.md            # Code examples
-THEME_VARIABLES_REFERENCE.md       # CSS variables
-IMPLEMENTATION_SUMMARY.md          # Technical details
-QUICK_START.md                     # This file
+postgres        postgres:16-alpine      Up
+redis           redis:7-alpine          Up
+chromadb        chroma:0.5.3            Up
+backend         panopticon_api          Up (healthy)
+frontend        next:latest             Up
+worker          celery worker           Up
 ```
 
 ---
 
-## Troubleshooting (30 Seconds)
+## Step 3: Initialize AI Models (First Run Only)
+```bash
+# This downloads ~2.5GB and takes 2-5 minutes
+docker-compose exec backend python ai/startup.py --device auto
 
-### Theme isn't changing?
-- Clear browser cache (`Ctrl+Shift+Delete`)
-- Check localStorage is enabled
-- Try incognito mode
-
-### Media search returns no results?
-- Check internet connection
-- Try simpler search terms
-- Wait a second for API response
-- Check browser console for errors
-
-### 3D scene not rendering?
-- Update GPU drivers
-- Try High Contrast theme (simpler)
-- Check WebGL support: `chrome://gpu`
-
-### Components look broken?
-- Rebuild frontend: `npm run build`
-- Clear `.next` folder
-- Restart dev server
+# You should see:
+# ✓ PyTorch detected (CUDA available)
+# ✓ YOLOv8x downloaded
+# ✓ FastReID downloaded
+# ✓ All models initialized
+```
 
 ---
 
-## Integration for Developers
+## Step 4: Verify Health
+```bash
+# API health check
+curl http://localhost:8000/health
 
-### Add Theme Switcher (Already Done!)
-```tsx
-// Already in: /src/components/layout/Header.tsx
-<ThemeSwitcher />
+# Should return:
+# {"status":"healthy","version":"1.0.0","env":"development"}
+
+# UI access
+open http://localhost:3000  # or visit in browser
 ```
 
-### Add Evidence Search
-```tsx
-import { EvidenceLibrary } from '@/components/evidence/EvidenceLibrary';
+---
 
-<EvidenceLibrary 
-  caseId="case-001"
-  onSelectEvidence={(evidence) => console.log(evidence)}
-/>
+## Step 5: Process Your First Evidence
+
+### Option A: Using API (CLI)
+
+```bash
+# 1. Create a case
+CASE_ID=$(curl -s -X POST http://localhost:8000/api/v1/cases \
+  -H "Content-Type: application/json" \
+  -d '{
+    "case_number": "DEMO-001",
+    "title": "Test Case",
+    "incident_date": "2026-07-06T12:00:00Z"
+  }' | jq -r '.id')
+
+echo "Case ID: $CASE_ID"
+
+# 2. Upload evidence video
+EVIDENCE_ID=$(curl -s -X POST http://localhost:8000/api/v1/evidence/upload \
+  -F "case_id=$CASE_ID" \
+  -F "file=@your_video.mp4" \
+  -F "notes=Test evidence" | jq -r '.id')
+
+echo "Evidence ID: $EVIDENCE_ID"
+
+# 3. Trigger processing
+curl -X POST http://localhost:8000/api/v1/evidence/$EVIDENCE_ID/process
+
+# 4. Poll for results (wait 30-60 seconds)
+curl http://localhost:8000/api/v1/evidence/$EVIDENCE_ID/detections | jq
+
+# 5. Generate report
+curl -X POST http://localhost:8000/api/v1/ai/report/generate \
+  -d "case_id=$CASE_ID&report_type=comprehensive"
 ```
 
-### Add 3D Scene
-```tsx
-import { Scene3DEnhanced } from '@/components/investigation/Scene3DEnhanced';
+### Option B: Using UI (GUI)
 
-<Scene3DEnhanced 
-  evidenceMarkers={markers}
-  onMarkerSelect={(marker) => console.log(marker)}
-/>
+1. Open http://localhost:3000
+2. Click "New Case"
+3. Upload MP4/AVI video
+4. Click "Process Evidence"
+5. Watch real-time progress
+6. Download report (JSON/PDF/HTML)
+
+---
+
+## Step 6: View Results
+
+### API Response
+```bash
+curl http://localhost:8000/api/v1/evidence/<EVIDENCE_ID>/detections
 ```
 
-### Switch Theme Programmatically
-```tsx
-import { setTheme } from '@/lib/theme';
-
-// Auto-switch to serious mode for critical cases
-if (caseStatus.severity === 'critical') {
-  setTheme('serious');
+Response includes:
+```json
+{
+  "persons": [
+    {"track_id": 1, "confidence": 0.92, "appearances": 45},
+    {"track_id": 2, "confidence": 0.87, "appearances": 32}
+  ],
+  "objects": {
+    "backpack": 2,
+    "bottle": 1
+  },
+  "timeline": [
+    {"time": 12.5, "event": "Person detected", "confidence": 0.92}
+  ],
+  "confidence": 0.89
 }
 ```
 
-See **INTEGRATION_EXAMPLES.md** for full code examples.
+### Generated Reports
+- **JSON:** Structured data format
+- **HTML:** Interactive dashboard (open in browser)
+- **PDF:** Printable forensic report
+- **CSV:** Statistical summary
 
 ---
 
-## File Summary
+## Common Commands
 
-### New Files Created: 13
+### Check Logs
+```bash
+docker-compose logs -f backend       # API logs
+docker-compose logs -f worker        # Processing logs
+docker-compose logs                  # All services
+```
 
-**Core System:**
-- `src/lib/theme.ts` - Theme management
-- `src/components/theme/ThemeProvider.tsx` - Provider
-- `src/components/theme/ThemeSwitcher.tsx` - Selector
+### Monitor Performance
+```bash
+docker stats                         # CPU/RAM/Network usage
+```
 
-**Media Search:**
-- `src/lib/media-search.ts` - Search service
-- `src/components/evidence/MediaSearchPanel.tsx` - UI
-- `src/components/evidence/EvidenceLibrary.tsx` - Manager
+### Restart Services
+```bash
+docker-compose restart backend       # Just API
+docker-compose restart               # All services
+docker-compose down                  # Stop all
+```
 
-**3D Visualization:**
-- `src/components/investigation/Scene3DEnhanced.tsx` - Scene
-
-**Documentation:**
-- `UPGRADE_SUMMARY.md` - Complete overview
-- `THEMING_AND_FEATURES.md` - User guide
-- `INTEGRATION_EXAMPLES.md` - Code examples
-- `THEME_VARIABLES_REFERENCE.md` - CSS reference
-- `IMPLEMENTATION_SUMMARY.md` - Technical details
-- `QUICK_START.md` - This file
-
-**Updated:**
-- `src/app/providers.tsx` - Theme provider added
-- `src/app/globals.css` - Enhanced with 4 themes
+### Clean Up (Remove Everything)
+```bash
+docker-compose down -v               # Delete volumes too
+rm -rf storage/                      # Delete local evidence
+```
 
 ---
 
-## What Can You Do Right Now?
+## Troubleshooting
 
-✅ **Switch between 4 themes**  
-✅ **Search for real evidence** (images & videos)  
-✅ **View interactive 3D crime scenes**  
-✅ **Track suspects, weapons, evidence markers**  
-✅ **Export scene screenshots**  
-✅ **Monitor 3D performance**  
-✅ **Use accessibility mode** (High Contrast)  
+### GPU Not Detected
+```bash
+# Check inside container
+docker-compose exec backend python -c "
+import torch
+print(f'CUDA: {torch.cuda.is_available()}')
+if torch.cuda.is_available():
+    print(f'GPU: {torch.cuda.get_device_name(0)}')
+"
+```
+
+### API Fails to Start
+```bash
+# Check database connection
+docker-compose logs postgres
+docker-compose logs backend | grep -i error
+
+# Reset database
+docker-compose down -v
+docker-compose up postgres -d
+docker-compose exec postgres psql -U panopticon -c "CREATE DATABASE panopticon"
+```
+
+### Processing Takes Too Long
+```bash
+# Check worker logs
+docker-compose logs worker
+
+# Monitor GPU usage
+docker exec panopticon_worker nvidia-smi
+
+# Reduce batch size
+echo "BATCH_SIZE=2" >> backend/.env
+docker-compose restart worker
+```
+
+### Out of Memory
+```bash
+# Skip segmentation (memory heavy)
+docker-compose exec backend python ai/startup.py --skip-segmentor
+
+# Use CPU mode
+echo "GPU_ENABLED=false" >> backend/.env
+docker-compose restart worker
+```
 
 ---
 
-## Performance
+## Testing Models Locally
 
-- **Theme switch:** <50ms (instant)
-- **Media search:** 1-3 seconds
-- **3D load:** <500ms
-- **Target FPS:** 60
-- **No extra dependencies** (uses existing packages)
+### Test Detection
+```python
+from ai.models.detector import YOLODetector
+import cv2
+
+detector = YOLODetector(device="cpu")
+detector.load()
+
+frame = cv2.imread("test_image.jpg")
+detections = detector.infer([frame])
+print(detections)
+```
+
+### Test Tracking
+```python
+from ai.models.tracker import ByteTracker
+
+tracker = ByteTracker()
+tracker.load()
+
+# Mock detections
+dets = [{"label": "person", "bbox": {...}}]
+tracked = tracker.infer(dets)
+print(tracked)
+```
+
+### Test ReID
+```python
+from ai.models.reid import FastReIDModule
+import cv2
+
+reid = FastReIDModule(device="cpu")
+reid.load()
+
+crops = [cv2.imread(f"person_{i}.jpg") for i in range(3)]
+embeddings = reid.infer(crops)
+print(embeddings.shape)  # (3, 512)
+```
 
 ---
 
 ## Next Steps
 
-### For Users:
-1. Try switching themes
-2. Search for evidence
-3. View 3D scenes
-4. Create a case in Serious Mode 🚨
+1. **Read Full Docs:** `AI_INFERENCE_GUIDE.md` (detailed)
+2. **Deploy to Production:** `PANOPTICON_DEPLOYMENT.md`
+3. **Run Tests:** `pytest ai/tests/ -v`
+4. **API Docs:** Open http://localhost:8000/api/docs
 
-### For Developers:
-1. Read INTEGRATION_EXAMPLES.md
-2. Connect to your APIs
-3. Integrate components into pages
-4. Customize colors in globals.css
+---
 
-### For Feature Requests:
-- Add custom marker colors
-- Integrate point clouds
-- Real-time marker updates
-- PDF export with 3D
-- Mobile touch controls
+## Performance Tips
+
+### Faster Processing
+```bash
+# Use GPU (if available)
+echo "GPU_ENABLED=true" >> backend/.env
+
+# Increase batch size (if memory allows)
+echo "BATCH_SIZE=16" >> backend/.env
+
+# Reduce confidence threshold (more detections)
+echo "DETECTION_CONFIDENCE_THRESHOLD=0.35" >> backend/.env
+
+docker-compose restart worker
+```
+
+### Lower Memory Usage
+```bash
+# Use CPU only
+echo "GPU_ENABLED=false" >> backend/.env
+
+# Skip segmentation
+docker-compose exec backend python ai/startup.py --skip-segmentor
+
+# Reduce batch size
+echo "BATCH_SIZE=2" >> backend/.env
+
+docker-compose restart worker
+```
+
+---
+
+## Example: Full Workflow
+
+```bash
+# 1. Start services
+docker-compose up -d
+
+# 2. Initialize models (one time)
+docker-compose exec backend python ai/startup.py --device auto
+
+# 3. Create case
+CASE=$(curl -s -X POST http://localhost:8000/api/v1/cases \
+  -H "Content-Type: application/json" \
+  -d '{"case_number":"EX-001","title":"Example"}' | jq -r '.id')
+
+# 4. Upload video
+EV=$(curl -s -X POST http://localhost:8000/api/v1/evidence/upload \
+  -F "case_id=$CASE" -F "file=@video.mp4" | jq -r '.id')
+
+# 5. Process (async, ~30-60 seconds)
+curl -X POST http://localhost:8000/api/v1/evidence/$EV/process
+
+# 6. Wait and check results
+sleep 60
+curl http://localhost:8000/api/v1/evidence/$EV/detections | jq .
+
+# 7. Generate report
+curl -X POST http://localhost:8000/api/v1/ai/report/generate \
+  -d "case_id=$CASE&report_type=comprehensive"
+
+echo "✓ Complete!"
+```
 
 ---
 
 ## Support
 
-### Documentation Files (Read These):
-1. **UPGRADE_SUMMARY.md** - Full feature overview
-2. **THEMING_AND_FEATURES.md** - Complete user guide
-3. **INTEGRATION_EXAMPLES.md** - Code samples
-4. **THEME_VARIABLES_REFERENCE.md** - CSS variables
-
-### Quick Answers:
-- "How do I change themes?" → Click icon top-right
-- "How do I search for evidence?" → Evidence → Search Database
-- "How do I add the components?" → See INTEGRATION_EXAMPLES.md
-- "How do I customize colors?" → Edit globals.css themes
-
-### Code Questions:
-- Check component JSDoc comments
-- Review TypeScript interfaces
-- Look at INTEGRATION_EXAMPLES.md
-- Check THEME_VARIABLES_REFERENCE.md
+- **API Docs:** http://localhost:8000/api/docs
+- **Logs:** `docker-compose logs -f`
+- **Issues:** Check `PANOPTICON_DEPLOYMENT.md` troubleshooting
+- **Code:** See `AI_INFERENCE_GUIDE.md` for implementation details
 
 ---
 
-## Summary
+**Ready? Start with Step 1!**
 
-Your PANOPTICON platform now has:
+Questions? Check full docs or review logs.
 
-✨ **Professional multi-theme system** (4 modes)  
-🔍 **Real evidence search** (live API integration)  
-🎬 **Advanced 3D visualization** (interactive markers)  
-🚨 **Critical case mode** (red alert theme)  
-♿ **Full accessibility** (WCAG AAA)  
-📚 **Comprehensive documentation**  
-
-**Status:** ✅ Production Ready  
-**Version:** 1.1.0  
-**Last Updated:** July 2, 2026
-
----
-
-## One-Minute Demo
-
-1. **Click theme icon** (top-right) → Select "Serious Mode" 🚨
-2. **Go to Evidence** → Click "Search Database"
-3. **Type:** "crime scene investigation"
-4. **Filter:** Images
-5. **Click search** → See results
-6. **Go to Investigation** → See 3D scene with markers
-7. **Click marker** → See details
-8. **Click 📸** → Export screenshot
-
-**Done!** You just used all the new features. 🎉
-
----
-
-**Ready to upgrade your investigations?** Start with the theme switcher in the top-right corner!
-
+Status: ✅ Production Ready

@@ -17,6 +17,7 @@ if _project_root not in sys.path:
 
 from app.core.config import settings
 from app.api.routes import auth, cases, evidence, ai, dashboard
+from app.api.routes import datasets as datasets_router
 
 
 # Logging
@@ -44,6 +45,25 @@ async def lifespan(app: FastAPI):
             logger.info("Database tables verified/created")
         except Exception as exc:
             logger.warning(f"Could not auto-create tables (DB may not be ready): {exc}")
+
+    # ── Initialize AI models on startup ────────────────────────────────────
+    try:
+        logger.info("Initializing AI inference models…")
+        from ai.models import startup_models
+        
+        def progress_cb(pct: int, msg: str):
+            if pct % 20 == 0 or pct == 100:
+                logger.info(f"  [{pct:3d}%] {msg}")
+        
+        results = startup_models(device="auto")
+        loaded_count = sum(1 for v in results.values() if v)
+        logger.info(f"✓ AI models initialized: {loaded_count}/{len(results)} modules loaded")
+        
+        for name, success in results.items():
+            status = "✓" if success else "✗"
+            logger.info(f"  {status} {name}")
+    except Exception as exc:
+        logger.warning(f"Could not initialize AI models: {exc}. Inference may be unavailable.")
 
     yield
     logger.info("PANOPTICON API shutting down")
@@ -79,6 +99,7 @@ app.include_router(cases.router, prefix=API_PREFIX)
 app.include_router(evidence.router, prefix=API_PREFIX)
 app.include_router(ai.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
+app.include_router(datasets_router.router)
 
 # Static files for local storage
 if os.path.exists(settings.LOCAL_STORAGE_PATH):

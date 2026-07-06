@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FolderOpen, Film, Search,
   BrainCircuit, FileText, Settings, ChevronLeft,
-  Eye, Zap, Activity, Users, Radio,
+  Eye, Zap, Activity, Users, Radio, Database,
 } from 'lucide-react';
 import { cn, initials } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
@@ -29,6 +29,12 @@ const NAV = [
       { href: '/ai-assistant', label: 'AI Copilot',     icon: BrainCircuit, badge: 'AI' },
       { href: '/tracking',     label: 'Live Tracking',  icon: Activity        },
       { href: '/reports',      label: 'Reports',        icon: FileText        },
+    ],
+  },
+  {
+    label: 'Data',
+    items: [
+      { href: '/datasets',     label: 'Datasets',       icon: Database, badge: 'EDA' },
     ],
   },
   {
