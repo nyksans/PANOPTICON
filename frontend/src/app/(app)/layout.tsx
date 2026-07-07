@@ -1,34 +1,37 @@
-'use client';
+'use client'
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/store/authStore';
-import { AppShell } from '@/components/layout/AppShell';
+import { ReactNode } from 'react'
+import { UserButton } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+import Sidebar from '@/components/layout/Sidebar'
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const { isAuthenticated, token } = useAuthStore();
+export default function AppLayout({ children }: { children: ReactNode }) {
+  const router = useRouter()
 
-  useEffect(() => {
-    // Check authentication from localStorage directly
-    const stored = localStorage.getItem('panopticon-auth');
-    let isAuth = false;
-    
-    if (stored) {
-      try {
-        const { state } = JSON.parse(stored);
-        isAuth = state?.isAuthenticated && state?.token;
-      } catch {
-        // Invalid storage
-      }
-    }
+  return (
+    <div className="flex h-screen bg-slate-950">
+      {/* Sidebar */}
+      <Sidebar />
 
-    // Redirect if not authenticated
-    if (!isAuth) {
-      window.location.replace('/auth/login');
-    }
-  }, []);
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header with User Button */}
+        <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur px-6 py-4 flex justify-end">
+          <UserButton
+            afterSignOutUrl="/auth/signin"
+            appearance={{
+              elements: {
+                avatarBox: 'w-10 h-10 rounded-lg',
+              },
+            }}
+          />
+        </header>
 
-  // Render immediately - don't wait for hydration
-  return <AppShell>{children}</AppShell>;
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  )
 }
