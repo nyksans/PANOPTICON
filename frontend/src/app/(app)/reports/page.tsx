@@ -169,7 +169,7 @@ export default function ReportsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                     <span className="text-2xs font-mono text-muted-foreground/50">{r.caseNumber}</span>
-                    <StatusBadge status={r.status} className="text-2xs" />
+                    <StatusBadge status={r.status as any} className="text-2xs" />
                   </div>
                   <p className="text-xs font-semibold line-clamp-2 leading-relaxed">{r.title}</p>
                   <p className="text-2xs text-muted-foreground mt-1">{r.pages}p · v{r.version} · {formatRelativeTime(r.generatedAt)}</p>
@@ -214,7 +214,7 @@ export default function ReportsPage() {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-mono text-muted-foreground/50">{selected.caseNumber}</span>
-                <StatusBadge status={selected.status} />
+                <StatusBadge status={selected.status as any} />
                 <span className="badge-info text-2xs capitalize">{TYPE_CFG[selected.type]?.label}</span>
               </div>
               <h2 className="text-base font-bold">{selected.title}</h2>
@@ -362,7 +362,7 @@ export default function ReportsPage() {
                               <td className="px-4 py-3 text-xs">{ev.d}</td>
                               <td className="px-4 py-3 text-xs">{ev.t}</td>
                               <td className="px-4 py-3 text-xs font-mono">{ev.dur}</td>
-                              <td className="px-4 py-3"><StatusBadge status={ev.s} /></td>
+                              <td className="px-4 py-3"><StatusBadge status={ev.s as any} /></td>
                               <td className="px-4 py-3"><ConfidenceBadge score={ev.c} size="sm" showLabel={false} /></td>
                             </tr>
                           ))}

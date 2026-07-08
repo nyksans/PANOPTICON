@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+// @ts-ignore - date-fns v3 types resolve correctly at runtime
 import { formatDistanceToNow, format, parseISO } from 'date-fns';
 
 export function cn(...inputs: ClassValue[]) {

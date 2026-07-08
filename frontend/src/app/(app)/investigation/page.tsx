@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, SkipBack, SkipForward, ZoomIn, ZoomOut,
   Maximize2, Layers, Tag, Bookmark, FileText, Clock,
   Users, Film, BrainCircuit, CheckCircle, Target,
-  Box, Network, Video, ChevronDown, AlertTriangle, GitMerge,
+  Box, Network, Video, ChevronDown, AlertTriangle, GitMerge, Upload,
 } from 'lucide-react';
 import { VideoPlayer, VideoPlayerHandle } from '@/components/investigation/VideoPlayer';
 import { mockEvidence, mockTimeline, mockSuspects, mockCases } from '@/lib/mockData';
@@ -58,16 +58,91 @@ export default function InvestigationPage() {
   const [activeEvent,     setActiveEvent]    = useState<string | null>('tl-003');
   const [bookmarks,       setBookmarks]      = useState<number[]>([]);
   const [note,            setNote]           = useState('');
+  const [uploadedVideoSrc,setUploadedVideoSrc]= useState<string | null>(null);
   const tickRef  = useRef<ReturnType<typeof setInterval>>();
   const videoRefs = useRef<(VideoPlayerHandle | null)[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const caseData  = mockCases[4]; // case-001 (Central Station)
+  const caseData  = mockCases[4];
   const evidence  = mockEvidence.filter(e => e.caseId === 'case-001' && (e.type === 'video' || e.type === 'bodycam'));
   const timeline  = mockTimeline.filter(t => t.caseId === 'case-001');
   const suspects  = mockSuspects.filter(s => s.caseId === 'case-001');
   const vidCount  = panelMode === 'single' ? 1 : panelMode === 'split' ? 2 : Math.min(4, evidence.length || 1);
   const pct       = (currentTime / TOTAL) * 100;
   const normalised= currentTime / TOTAL;
+
+  // ── Time-keyed detections (animate as scrubber moves) ────────────────
+  // Each segment: [startSec, endSec, detections[]]
+  const DETECTION_TIMELINE = [
+    { from: 0,   to: 200,  items: [
+      { label:'Person A', confidence:91, x:0.20, y:0.15, w:0.14, h:0.52, color:'#F59E0B', trackId:'p1' },
+    ]},
+    { from: 200, to: 400,  items: [
+      { label:'Suspect α', confidence:94, x:0.28, y:0.18, w:0.16, h:0.54, color:'#F59E0B', trackId:'p1' },
+      { label:'Bag',       confidence:88, x:0.30, y:0.62, w:0.10, h:0.16, color:'#22C55E', trackId:'obj1' },
+    ]},
+    { from: 400, to: 600,  items: [
+      { label:'Suspect α', confidence:94, x:0.32, y:0.20, w:0.16, h:0.54, color:'#F59E0B', trackId:'p1' },
+      { label:'Suspect β', confidence:88, x:0.60, y:0.22, w:0.13, h:0.50, color:'#FB923C', trackId:'p2' },
+      { label:'Backpack',  confidence:96, x:0.31, y:0.60, w:0.11, h:0.18, color:'#22C55E', trackId:'obj1' },
+    ]},
+    { from: 600, to: 750,  items: [
+      { label:'Suspect α', confidence:97, x:0.35, y:0.18, w:0.17, h:0.56, color:'#F59E0B', trackId:'p1' },
+      { label:'Suspect β', confidence:92, x:0.58, y:0.20, w:0.14, h:0.52, color:'#FB923C', trackId:'p2' },
+      { label:'Backpack',  confidence:96, x:0.34, y:0.62, w:0.11, h:0.17, color:'#22C55E', trackId:'obj1' },
+      { label:'Firearm',   confidence:83, x:0.40, y:0.55, w:0.07, h:0.12, color:'#EF4444', trackId:'obj2' },
+    ]},
+    { from: 750, to: 900,  items: [
+      { label:'Suspect α', confidence:98, x:0.38, y:0.15, w:0.18, h:0.58, color:'#F59E0B', trackId:'p1' },
+      { label:'Suspect β', confidence:95, x:0.56, y:0.18, w:0.15, h:0.55, color:'#FB923C', trackId:'p2' },
+      { label:'Firearm',   confidence:91, x:0.42, y:0.52, w:0.08, h:0.13, color:'#EF4444', trackId:'obj2' },
+      { label:'Phone',     confidence:79, x:0.61, y:0.58, w:0.07, h:0.08, color:'#38BDF8', trackId:'obj3' },
+    ]},
+    { from: 900, to: 1100, items: [
+      { label:'Suspect α', confidence:96, x:0.22, y:0.16, w:0.16, h:0.55, color:'#F59E0B', trackId:'p1' },
+      { label:'Suspect β', confidence:89, x:0.65, y:0.22, w:0.14, h:0.50, color:'#FB923C', trackId:'p2' },
+      { label:'Vehicle',   confidence:87, x:0.10, y:0.40, w:0.25, h:0.28, color:'#A78BFA', trackId:'obj4' },
+    ]},
+    { from: 1100, to: 1400, items: [
+      { label:'Suspect α', confidence:93, x:0.55, y:0.20, w:0.15, h:0.52, color:'#F59E0B', trackId:'p1' },
+      { label:'Bystander', confidence:72, x:0.15, y:0.25, w:0.12, h:0.46, color:'#6B7280', trackId:'p3' },
+    ]},
+    { from: 1400, to: 1800, items: [
+      { label:'Suspect α', confidence:91, x:0.70, y:0.22, w:0.14, h:0.50, color:'#F59E0B', trackId:'p1' },
+    ]},
+  ];
+
+  const currentDetections = useMemo(() => {
+    const seg = DETECTION_TIMELINE.find(s => currentTime >= s.from && currentTime < s.to);
+    if (!seg) return [];
+    // Add slight position jitter to simulate real tracking noise
+    const jitter = 0.003;
+    return seg.items.map(d => ({
+      ...d,
+      x: d.x + (Math.sin(currentTime * 3.7 + d.x * 10) * jitter),
+      y: d.y + (Math.cos(currentTime * 2.3 + d.y * 10) * jitter),
+    }));
+  }, [currentTime]);
+
+  // ── Aggregate stats across all detections for sidebar ────────────────
+  const allObjects = useMemo(() => {
+    const map = new Map<string, { count: number; maxConf: number; color: string }>();
+    DETECTION_TIMELINE.forEach(seg => {
+      seg.items.forEach(d => {
+        const existing = map.get(d.label);
+        if (!existing) {
+          map.set(d.label, { count: 1, maxConf: d.confidence, color: d.color });
+        } else {
+          existing.count++;
+          if (d.confidence > existing.maxConf) existing.maxConf = d.confidence;
+        }
+      });
+    });
+    return Array.from(map.entries())
+      .map(([label, v]) => ({ label, ...v }))
+      .sort((a, b) => b.maxConf - a.maxConf);
+  }, []);
+
 
   // Play tick
   useEffect(() => {
@@ -124,11 +199,22 @@ export default function InvestigationPage() {
     critical:'bg-danger', high:'bg-warning', medium:'bg-accent', low:'bg-muted-foreground',
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setUploadedVideoSrc(url);
+      toast.success('Video loaded successfully');
+    }
+  };
+
   return (
     <div className="flex h-full overflow-hidden bg-background">
+      <input type="file" accept="video/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+
 
       {/* ─── Left sidebar ────────────────────────────────────────── */}
-      <div className="w-60 shrink-0 border-r border-border flex flex-col bg-[#040810] overflow-hidden">
+      <div className="w-60 shrink-0 border-r flex flex-col overflow-hidden" style={{ borderColor:'var(--border)', background:'var(--bg-base)' }}>
         {/* Case info */}
         <div className="p-3 border-b border-border">
           <p className="text-2xs font-mono text-muted-foreground/50 mb-0.5">{caseData?.caseNumber}</p>
@@ -153,7 +239,7 @@ export default function InvestigationPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate group-hover:text-warning transition-colors">{s.label}</p>
-                  <p className="text-2xs text-muted-foreground">{s.cameras.length} cameras</p>
+                  <p className="text-2xs text-muted-foreground">{s.cameras?.length || 0} cameras</p>
                 </div>
                 <ConfidenceBadge score={s.confidenceScore} size="sm" showLabel={false} />
               </div>
@@ -209,7 +295,7 @@ export default function InvestigationPage() {
       {/* ─── Center viewer ───────────────────────────────────────── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Toolbar */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-[#060b17] shrink-0 flex-wrap">
+        <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0 flex-wrap" style={{ borderColor:'var(--border)', background:'var(--bg-surface)' }}>
           {/* View tabs */}
           <div className="flex items-center bg-surface border border-border rounded-lg overflow-hidden">
             {([['video', Video, 'Video'], ['3d', Box, '3D Scene'], ['graph', Network, 'Graph'], ['correlations', GitMerge, 'Correlations']] as const).map(([mode, Icon, lbl]) => (
@@ -235,6 +321,13 @@ export default function InvestigationPage() {
           )}
 
           <div className="flex items-center gap-2 ml-auto">
+            {viewMode === 'video' && (
+              <button onClick={() => fileInputRef.current?.click()}
+                className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-colors',
+                  'border-border text-muted-foreground hover:text-foreground')}>
+                <Upload className="w-3.5 h-3.5" /> Load Video
+              </button>
+            )}
             {viewMode === 'video' && (
               <button onClick={() => setShowOverlays(o => !o)}
                 className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border transition-colors',
@@ -266,31 +359,40 @@ export default function InvestigationPage() {
               panelMode === 'quad'  ? 'grid grid-cols-2 grid-rows-2' :
               panelMode === 'split' ? 'grid grid-cols-2' :
               'flex')}>
-              {(evidence.length > 0 ? evidence : [{ id:'placeholder', type:'video', originalName:'No Evidence Loaded', thumbnailUrl:'', metadata:{cameraId:'—'}, duration:TOTAL }] as any[])
+              {(evidence.length > 0
+                ? evidence
+                : [{ id:'cam-a', type:'video', originalName:'CAM-01 Platform 4', thumbnailUrl:'', metadata:{ cameraId:'CAM-01' }, duration:TOTAL },
+                   { id:'cam-b', type:'video', originalName:'CAM-02 Concourse', thumbnailUrl:'', metadata:{ cameraId:'CAM-02' }, duration:TOTAL },
+                   { id:'cam-c', type:'video', originalName:'CAM-03 South Entrance', thumbnailUrl:'', metadata:{ cameraId:'CAM-03' }, duration:TOTAL },
+                   { id:'cam-d', type:'video', originalName:'CAM-04 Exit Gate', thumbnailUrl:'', metadata:{ cameraId:'CAM-04' }, duration:TOTAL },
+                ] as any[])
                 .slice(0, vidCount)
                 .map((ev: any, idx: number) => (
                 <VideoPlayer
                   key={ev.id}
                   ref={(el) => { videoRefs.current[idx] = el; }}
+                  src={idx === 0 && uploadedVideoSrc ? uploadedVideoSrc : ev.src}
                   thumbnailUrl={ev.thumbnailUrl}
                   isActive={selectedCam === idx}
                   playing={playing && selectedCam === idx}
                   currentTime={currentTime}
                   zoom={panelMode === 'single' ? zoom : 1}
                   showOverlays={showOverlays}
+                  detections={selectedCam === idx && showOverlays ? currentDetections : []}
                   cameraId={ev.metadata?.cameraId ?? ev.id}
                   cameraName={ev.originalName}
                   duration={ev.duration ?? TOTAL}
                   onSelect={() => setSelectedCam(idx)}
                 />
               ))}
+
             </div>
           )}
         </div>
 
         {/* Playback controls — video only */}
         {viewMode === 'video' && (
-          <div className="border-t border-border bg-[#060b17] px-4 pt-3 pb-4 shrink-0">
+          <div className="border-t border-border px-4 pt-3 pb-4 shrink-0" style={{ borderColor:'var(--border)', background:'var(--bg-surface)' }}>
             {/* Scrubber */}
             <div className="mb-3 relative select-none">
               {/* Bookmark pips */}
@@ -380,7 +482,7 @@ export default function InvestigationPage() {
       </div>
 
       {/* ─── Right: detections ───────────────────────────────────── */}
-      <div className="w-56 shrink-0 border-l border-border flex flex-col bg-[#040810] overflow-hidden">
+      <div className="w-56 shrink-0 border-l flex flex-col overflow-hidden" style={{ borderColor:'var(--border)', background:'var(--bg-base)' }}>
         <div className="p-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-accent" />
@@ -390,32 +492,58 @@ export default function InvestigationPage() {
         </div>
 
         <div className="flex-1 overflow-y-auto no-scrollbar p-3 space-y-4">
+          {/* Current frame detections */}
+          <div>
+            <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Current Frame</p>
+            {currentDetections.length === 0 ? (
+              <p className="text-2xs text-muted-foreground/40 italic font-mono">No detections at this time</p>
+            ) : (
+              <div className="space-y-1">
+                {currentDetections.map((d, i) => (
+                  <motion.div key={d.trackId ?? i}
+                    initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                    className="flex items-center gap-2 p-2 rounded-lg border"
+                    style={{ background: `${d.color}10`, borderColor: `${d.color}40` }}>
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color, boxShadow: `0 0 6px ${d.color}` }} />
+                    <span className="text-xs font-medium flex-1" style={{ color: d.color }}>{d.label}</span>
+                    <span className="text-xs font-mono font-bold" style={{ color: d.color }}>{d.confidence}%</span>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* All tracked objects */}
+          <div>
+            <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">All Tracked</p>
+            {allObjects.filter(o => !['Suspect α','Suspect β','Person A','Bystander'].includes(o.label)).map((obj, i) => (
+              <motion.div key={obj.label} initial={{ opacity:0, x:8 }} animate={{ opacity:1, x:0 }} transition={{ delay: i*0.06 }}
+                className="flex items-center justify-between p-2 rounded-lg border mb-1.5 cursor-pointer"
+                style={{ background: 'var(--bg-surface)', borderColor: `${obj.color}40` }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: obj.color }} />
+                  <span className="text-xs">{obj.label}</span>
+                </div>
+                <ConfidenceBadge score={obj.maxConf} size="sm" showLabel={false} />
+              </motion.div>
+            ))}
+          </div>
+
           {/* Persons */}
           <div>
             <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Persons</p>
             {suspects.map((s,i) => (
               <motion.div key={s.id} initial={{ opacity:0, x:8 }} animate={{ opacity:1, x:0 }} transition={{ delay: i*0.1 }}
-                className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border mb-1.5 hover:border-warning/35 cursor-pointer">
+                className="flex items-center gap-2 p-2 rounded-lg border mb-1.5 hover:border-warning/35 cursor-pointer"
+                style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)' }}>
                 <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0">
                   <img src={s.thumbnailUrl} alt="" className="w-full h-full object-cover" />
                   <div className="absolute inset-0 border-2 border-warning/60 rounded-lg" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium">{s.label}</p>
+                  <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>{s.label}</p>
                   <ConfidenceBadge score={s.confidenceScore} size="sm" />
                 </div>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Objects */}
-          <div>
-            <p className="text-2xs font-semibold text-muted-foreground/60 uppercase tracking-wider mb-2">Objects</p>
-            {[{ l:'Backpack', c:96, col:'border-success/45' }, { l:'Firearm', c:89, col:'border-danger/45' }, { l:'Phone', c:74, col:'border-accent/45' }].map((obj,i) => (
-              <motion.div key={obj.l} initial={{ opacity:0, x:8 }} animate={{ opacity:1, x:0 }} transition={{ delay:0.2+i*0.08 }}
-                className={cn('flex items-center justify-between p-2 rounded-lg bg-surface border mb-1.5 cursor-pointer hover:border-accent/30', obj.col)}>
-                <span className="text-xs">{obj.l}</span>
-                <ConfidenceBadge score={obj.c} size="sm" showLabel={false} />
               </motion.div>
             ))}
           </div>

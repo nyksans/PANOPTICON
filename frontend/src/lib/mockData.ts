@@ -1,328 +1,160 @@
-import type { Case, Evidence, Suspect, TimelineEvent, DashboardStats, Alert, ChatMessage, Report } from '@/types';
+import type { Case, Evidence, Suspect, TimelineEvent, DashboardStats, Alert, ChatMessage, Report, IndianCase } from '@/types';
+import { indianCases } from './indianCases';
 
-// ─── REAL HISTORICAL CASES ────────────────────────────────────────────────────
-export const mockCases: Case[] = [
-  {
-    id: 'case-jack',
-    caseNumber: 'PAN-1888-0001',
-    title: 'Jack the Ripper – Whitechapel Murders',
-    description:
-      'Series of 5 canonical murders in Whitechapel, London. Victims: Mary Ann Nichols, Annie Chapman, Elizabeth Stride, Catherine Eddowes, Mary Jane Kelly. Suspect known as "Jack the Ripper" — identity never confirmed. AI re-analysis of historical police files and crime scene photographs.',
-    status: 'active',
-    priority: 'critical',
-    category: 'Serial Homicide',
-    location: 'Whitechapel, London, UK',
-    incidentDate: '1888-08-31T03:40:00Z',
-    createdAt: '2026-01-15T09:00:00Z',
-    updatedAt: '2026-06-30T11:00:00Z',
-    createdBy: 'Det. Sarah Kim',
-    assignedTo: ['user-001', 'user-002'],
-    evidenceCount: 47,
-    suspects: 6,
-    aiProcessed: true,
-    confidenceScore: 34,
-    tags: ['serial-killer', 'whitechapel', '1888', 'unsolved', 'historical'],
-  },
-  {
-    id: 'case-cooper',
-    caseNumber: 'PAN-1971-0001',
-    title: 'D.B. Cooper – Aircraft Hijacking & Disappearance',
-    description:
-      'On November 24, 1971, a man using the alias "Dan Cooper" hijacked Northwest Orient Flight 305. He extorted $200,000 ransom, released passengers, then parachuted from the rear of the aircraft over the Pacific Northwest. Only partial ransom recovered in 1980. Identity never confirmed — the only unsolved aircraft hijacking in US aviation history.',
-    status: 'active',
-    priority: 'high',
-    category: 'Hijacking / Extortion',
-    location: 'Portland, OR → Seattle, WA → Pacific Northwest (airborne)',
-    incidentDate: '1971-11-24T14:55:00Z',
-    createdAt: '2026-02-01T09:00:00Z',
-    updatedAt: '2026-06-28T15:00:00Z',
-    createdBy: 'Det. Marcus Webb',
-    assignedTo: ['user-002', 'user-003'],
-    evidenceCount: 89,
-    suspects: 11,
-    aiProcessed: true,
-    confidenceScore: 41,
-    tags: ['hijacking', 'parachute', 'fbi', 'ransom', 'unsolved', '1971'],
-  },
-  {
-    id: 'case-zodiac',
-    caseNumber: 'PAN-1969-0001',
-    title: 'Zodiac Killer – Northern California',
-    description:
-      'Unidentified serial killer active in Northern California in the late 1960s. Claimed 37 victims, confirmed 5. Sent taunting cipher letters to newspapers. Four ciphers — one decoded 51 years later by amateur cryptographers in 2020. Case remains open.',
-    status: 'active',
-    priority: 'critical',
-    category: 'Serial Homicide',
-    location: 'San Francisco Bay Area, California, USA',
-    incidentDate: '1968-12-20T23:15:00Z',
-    createdAt: '2026-01-20T09:00:00Z',
-    updatedAt: '2026-06-25T10:30:00Z',
-    createdBy: 'Sgt. Diana Torres',
-    assignedTo: ['user-001', 'user-004'],
-    evidenceCount: 134,
-    suspects: 4,
-    aiProcessed: true,
-    confidenceScore: 28,
-    tags: ['zodiac', 'cipher', 'serial-killer', 'california', 'unsolved'],
-  },
-  {
-    id: 'case-tupac',
-    caseNumber: 'PAN-1996-0012',
-    title: 'Tupac Shakur – Drive-By Shooting',
-    description:
-      'Rapper Tupac Shakur shot 4 times in a drive-by in Las Vegas on September 7, 1996, after attending the Mike Tyson vs. Bruce Seldon fight. Died September 13. Case officially unsolved. Witnesses identified a white BMW 750 sedan. Multiple suspects investigated.',
-    status: 'active',
-    priority: 'high',
-    category: 'Homicide',
-    location: 'Flamingo Road, Las Vegas, NV',
-    incidentDate: '1996-09-07T23:15:00Z',
-    createdAt: '2026-03-01T09:00:00Z',
-    updatedAt: '2026-06-29T09:00:00Z',
-    createdBy: 'Det. Sarah Kim',
-    assignedTo: ['user-001'],
-    evidenceCount: 62,
-    suspects: 5,
-    aiProcessed: true,
-    confidenceScore: 52,
-    tags: ['drive-by', 'las-vegas', '1996', 'unsolved', 'homicide'],
-  },
-  {
-    id: 'case-001',
-    caseNumber: 'PAN-2026-0047',
-    title: 'Armed Robbery – Central Station',
-    description: 'Armed robbery at Central Station at 14:32. Two suspects fled on foot through the north exit. Victim sustained minor injuries. CCTV from 4 cameras captured full incident.',
-    status: 'active',
-    priority: 'critical',
-    category: 'Armed Robbery',
-    location: 'Central Station, Platform 4',
-    incidentDate: '2026-06-28T14:32:00Z',
-    createdAt: '2026-06-28T15:00:00Z',
-    updatedAt: '2026-06-30T09:15:00Z',
-    createdBy: 'Det. Sarah Kim',
-    assignedTo: ['user-001', 'user-002'],
-    evidenceCount: 14,
-    suspects: 2,
-    aiProcessed: true,
-    confidenceScore: 87,
-    tags: ['robbery', 'armed', 'station', 'cctv'],
-  },
-  {
-    id: 'case-002',
-    caseNumber: 'PAN-2026-0043',
-    title: 'Homicide Investigation – Riverside Park',
-    description: 'Victim found unresponsive near Riverside Park. Evidence suggests altercation. Multiple cameras in the area being analyzed.',
-    status: 'active',
-    priority: 'critical',
-    category: 'Homicide',
-    location: 'Riverside Park, East Entrance',
-    incidentDate: '2026-06-25T23:10:00Z',
-    createdAt: '2026-06-26T00:30:00Z',
-    updatedAt: '2026-06-30T11:00:00Z',
-    createdBy: 'Det. Marcus Webb',
-    assignedTo: ['user-002', 'user-003'],
-    evidenceCount: 28,
-    suspects: 1,
-    aiProcessed: true,
-    confidenceScore: 72,
-    tags: ['homicide', 'park', 'nighttime'],
-  },
-];
+// Export the indian cases directly if needed
+export { indianCases };
 
-// ─── EVIDENCE ────────────────────────────────────────────────────────────────
-export const mockEvidence: Evidence[] = [
-  {
-    id: 'ev-jack-01',
-    caseId: 'case-jack',
-    filename: 'whitechapel_crime_scene_1888.jpg',
-    originalName: 'Crime Scene Photograph – Buck\'s Row, 1888',
-    type: 'image',
-    size: 4_200_000,
-    fileUrl: 'https://picsum.photos/seed/jack01/800/600',
-    thumbnailUrl: 'https://picsum.photos/seed/jack01/320/180',
-    status: 'processed',
-    uploadedAt: '2026-01-15T10:00:00Z',
-    processedAt: '2026-01-15T11:00:00Z',
-    uploadedBy: 'Det. Sarah Kim',
-    metadata: { captureDate: '1888-08-31', cameraLocation: "Buck's Row, Whitechapel" },
-    aiResults: { processingId: 'proc-jack-01', evidenceId: 'ev-jack-01', status: 'completed', progress: 100, startedAt: '2026-01-15T10:30:00Z', completedAt: '2026-01-15T11:00:00Z', objects: [], persons: [], events: [], synopsis: 'Historical crime scene photograph digitally enhanced. AI wound pattern analysis completed. Incision consistent with surgical or butchery knowledge.', confidence: 71, processingModels: ['SAM2', 'Gemini Pro'] },
-    tags: ['crime-scene', '1888', 'historical', 'whitechapel'],
-    notes: 'Digitized from Metropolitan Police archives. AI enhanced resolution 4×.',
-    hash: 'sha256:jack01abc',
-  },
-  {
-    id: 'ev-cooper-01',
-    caseId: 'case-cooper',
-    filename: 'northwest_orient_305_manifest.pdf',
-    originalName: 'Flight 305 Passenger Manifest & Suspect Sketch',
-    type: 'document',
-    size: 890_000,
-    fileUrl: 'https://picsum.photos/seed/cooper01/800/600',
-    thumbnailUrl: 'https://picsum.photos/seed/cooper01/320/180',
-    status: 'processed',
-    uploadedAt: '2026-02-01T10:00:00Z',
-    processedAt: '2026-02-01T11:30:00Z',
-    uploadedBy: 'Det. Marcus Webb',
-    metadata: { captureDate: '1971-11-24', cameraLocation: 'Portland International Airport' },
-    aiResults: { processingId: 'proc-cooper-01', evidenceId: 'ev-cooper-01', status: 'completed', progress: 100, startedAt: '2026-02-01T10:15:00Z', completedAt: '2026-02-01T11:30:00Z', objects: [], persons: [], events: [], synopsis: 'FBI composite sketch analyzed. AI age-progression modeling applied to 18 known suspects. Anthropometric comparison completed against Northwest Airlines employee records.', confidence: 41, processingModels: ['Gemini Pro', 'BGE-M3'] },
-    tags: ['fbi', 'sketch', 'manifest', '1971', 'hijacking'],
-    notes: 'Original FBI NORJAK file. Declassified 2021.',
-    hash: 'sha256:cooper01abc',
-  },
-  {
-    id: 'ev-zodiac-01',
-    caseId: 'case-zodiac',
-    filename: 'zodiac_cipher_408.jpg',
-    originalName: 'Zodiac 408 Cipher – San Francisco Chronicle 1969',
-    type: 'image',
-    size: 2_100_000,
-    fileUrl: 'https://picsum.photos/seed/zodiac01/800/600',
-    thumbnailUrl: 'https://picsum.photos/seed/zodiac01/320/180',
-    status: 'processed',
-    uploadedAt: '2026-01-20T10:00:00Z',
-    processedAt: '2026-01-20T14:00:00Z',
-    uploadedBy: 'Sgt. Diana Torres',
-    metadata: { captureDate: '1969-07-31', cameraLocation: 'San Francisco Chronicle' },
-    aiResults: { processingId: 'proc-zod-01', evidenceId: 'ev-zodiac-01', status: 'completed', progress: 100, startedAt: '2026-01-20T10:30:00Z', completedAt: '2026-01-20T14:00:00Z', objects: [], persons: [], events: [], synopsis: '408-character cipher fully decoded. AI linguistic analysis of decoded text identifies potential geographic references to Mt. Diablo area. Handwriting analysis: right-handed, probable age 25-45.', confidence: 67, processingModels: ['Gemini Pro', 'BGE-M3'] },
-    tags: ['cipher', '1969', 'zodiac', 'handwriting'],
-    notes: '408 cipher decoded 1969 by Donald Harden. Remaining 340 cipher cracked 2020. AI reanalysis ongoing.',
-    hash: 'sha256:zodiac01abc',
-  },
-  {
-    id: 'ev-001',
-    caseId: 'case-001',
-    filename: 'station_cam4_20260628_1430.mp4',
-    originalName: 'Station Camera 4 – 28 Jun 14:30',
-    type: 'video',
-    size: 284_000_000,
-    duration: 1800,
-    resolution: '1920x1080',
-    fps: 30,
-    fileUrl: '/evidence/ev-001.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/ev001/320/180',
-    status: 'processed',
-    uploadedAt: '2026-06-28T15:10:00Z',
-    processedAt: '2026-06-28T16:00:00Z',
-    uploadedBy: 'Det. Sarah Kim',
-    metadata: { captureDate: '2026-06-28', captureTime: '14:30:00', cameraId: 'CAM-STN-004', cameraLocation: 'Central Station Platform 4' },
-    aiResults: { processingId: 'proc-001', evidenceId: 'ev-001', status: 'completed', progress: 100, startedAt: '2026-06-28T15:15:00Z', completedAt: '2026-06-28T16:00:00Z', objects: [], persons: [], events: [], synopsis: 'Two suspects approach the victim at 14:32:14. A confrontation lasting 47 seconds is observed. Suspects flee northward at 14:33:01. Clear facial features captured on both suspects.', confidence: 92, processingModels: ['YOLOv8', 'ByteTrack', 'FastReID'] },
-    tags: ['platform', 'suspects', 'robbery'],
-    notes: 'Primary evidence. High confidence facial capture on suspect 1 at 14:32:28.',
-    hash: 'sha256:a1b2c3d4e5f6',
-  },
-  {
-    id: 'ev-002',
-    caseId: 'case-001',
-    filename: 'station_cam2_20260628_1430.mp4',
-    originalName: 'Station Camera 2 – Overview',
-    type: 'video',
-    size: 196_000_000,
-    duration: 1800,
-    resolution: '1920x1080',
-    fps: 25,
-    fileUrl: '/evidence/ev-002.mp4',
-    thumbnailUrl: 'https://picsum.photos/seed/ev002/320/180',
-    status: 'processed',
-    uploadedAt: '2026-06-28T15:12:00Z',
-    processedAt: '2026-06-28T16:15:00Z',
-    uploadedBy: 'Det. Sarah Kim',
-    metadata: { captureDate: '2026-06-28', captureTime: '14:30:00', cameraId: 'CAM-STN-002', cameraLocation: 'Central Station Main Concourse' },
-    tags: ['overview', 'concourse'],
-    notes: 'Shows suspects entering station 4 minutes before incident.',
-    hash: 'sha256:b2c3d4e5f6a7',
-  },
-];
+// Map indianCases to mockCases (basic Case type)
+export const mockCases: Case[] = indianCases.map(c => ({
+  id: c.id,
+  caseNumber: c.caseNumber,
+  title: c.title,
+  description: c.description,
+  status: c.status as any,
+  priority: c.priority,
+  category: c.category,
+  location: c.location,
+  incidentDate: c.incidentDate,
+  createdAt: c.createdAt,
+  updatedAt: c.updatedAt,
+  createdBy: c.createdBy,
+  assignedTo: c.assignedTo,
+  evidenceCount: c.evidenceCount,
+  suspects: c.suspects,
+  aiProcessed: c.aiProcessed,
+  confidenceScore: c.confidenceScore,
+  tags: c.tags,
+}));
 
-// ─── SUSPECTS ─────────────────────────────────────────────────────────────────
-export const mockSuspects: Suspect[] = [
-  {
-    id: 'sus-jack-01', caseId: 'case-jack', label: 'Aaron Kosminski',
-    description: 'Polish barber. Living in Whitechapel at time of murders. Institutionalized 1891. Named in police memoranda. DNA evidence 2014 linked to Catherine Eddowes crime scene.',
-    attributes: { gender: 'Male', ageRange: '23-25', clothing: ['Work coat', 'Flat cap'] },
-    trackIds: [], firstSeen: '1888-08-31T03:00:00Z', lastSeen: '1888-11-09T04:00:00Z',
-    appearances: 5, cameras: ['Historical records'], confidenceScore: 62,
-    thumbnailUrl: 'https://picsum.photos/seed/susjack01/80/80', status: 'unidentified',
-    notes: 'Mitochondrial DNA match to shawl found near Eddowes body. Match contested by some researchers.',
-  },
-  {
-    id: 'sus-cooper-01', caseId: 'case-cooper', label: 'Richard Floyd McCoy Jr.',
-    description: 'Copycat hijacker convicted of similar crime in April 1972. FBI agents noted "striking similarities" — same type of briefcase, same seating position. Shot and killed escaping federal prison 1974.',
-    attributes: { gender: 'Male', ageRange: '29', clothing: ['Business suit', 'Dark tie', 'Sunglasses'] },
-    trackIds: [], firstSeen: '1971-11-24T14:55:00Z', lastSeen: '1971-11-24T20:00:00Z',
-    appearances: 3, cameras: ['Portland Airport CCTV', 'Flight 305 Cabin'], confidenceScore: 55,
-    thumbnailUrl: 'https://picsum.photos/seed/suscooper01/80/80', status: 'unidentified',
-    notes: 'FBI officially ruled out McCoy in 1991. Researchers disagree.',
-  },
-  {
-    id: 'sus-zodiac-01', caseId: 'case-zodiac', label: 'Arthur Leigh Allen',
-    description: 'Primary suspect per SFPD and Vallejo PD. Wore Zodiac brand watch during murders. Owned Harpers Ferry ammo matching bullets. Failed polygraph. DNA did not match 2002 sample from Zodiac letter.',
-    attributes: { gender: 'Male', ageRange: '35-37', clothing: ['Dark jacket', 'Work boots'] },
-    trackIds: [], firstSeen: '1968-12-20T23:00:00Z', lastSeen: '1969-10-11T21:00:00Z',
-    appearances: 4, cameras: ['Lake Berryessa witness accounts'], confidenceScore: 48,
-    thumbnailUrl: 'https://picsum.photos/seed/suszodiac01/80/80', status: 'unidentified',
-    notes: 'Died 1992 before DNA testing was conclusive. Handwriting experts divided.',
-  },
-  {
-    id: 'sus-001', caseId: 'case-001', label: 'Suspect Alpha',
-    description: 'Male, ~30-35 yrs, dark jacket, cap. Primary aggressor during robbery.',
-    attributes: { gender: 'Male', ageRange: '30-35', clothing: ['Dark jacket', 'Baseball cap', 'Dark trousers'], accessories: ['Backpack'] },
-    trackIds: [{ evidenceId: 'ev-001', trackId: 'TRK-001' }, { evidenceId: 'ev-002', trackId: 'TRK-007' }],
-    firstSeen: '2026-06-28T14:28:00Z', lastSeen: '2026-06-28T14:35:00Z',
-    appearances: 2, cameras: ['CAM-STN-004', 'CAM-STN-002'], confidenceScore: 94,
-    thumbnailUrl: 'https://picsum.photos/seed/sus001/80/80', status: 'unidentified',
-    notes: 'Clear facial capture at 14:32:28.',
-  },
-  {
-    id: 'sus-002', caseId: 'case-001', label: 'Suspect Beta',
-    description: 'Male, ~25-30 yrs, grey hoodie, jeans. Lookout role.',
-    attributes: { gender: 'Male', ageRange: '25-30', clothing: ['Grey hoodie', 'Blue jeans', 'White sneakers'] },
-    trackIds: [{ evidenceId: 'ev-001', trackId: 'TRK-002' }, { evidenceId: 'ev-002', trackId: 'TRK-008' }],
-    firstSeen: '2026-06-28T14:28:00Z', lastSeen: '2026-06-28T14:35:00Z',
-    appearances: 2, cameras: ['CAM-STN-004', 'CAM-STN-002'], confidenceScore: 88,
-    thumbnailUrl: 'https://picsum.photos/seed/sus002/80/80', status: 'unidentified',
-  },
-];
+// Map Indian case evidence gallery and CCTV cameras to generic Evidence
+export const mockEvidence: Evidence[] = indianCases.flatMap(c => {
+  const evidences: Evidence[] = [];
+  
+  if (c.metadata?.evidenceGallery) {
+    c.metadata.evidenceGallery.forEach(eg => {
+      evidences.push({
+        id: eg.id,
+        caseId: c.id,
+        filename: eg.caption,
+        originalName: eg.caption,
+        type: eg.type === 'cctv_frame' ? 'video' : eg.type === 'document_scan' ? 'document' : 'image',
+        size: 0,
+        fileUrl: eg.thumbnailUrl,
+        description: eg.caption,
+        url: eg.thumbnailUrl,
+        thumbnailUrl: eg.thumbnailUrl,
+        status: 'processed',
+        tags: [eg.type, 'forensic'],
+        uploadedBy: c.createdBy,
+        uploadedAt: eg.timestamp,
+        hash: c.metadata.chainOfCustody?.[0]?.hash || 'unknown',
+        notes: eg.caption,
+        metadata: {
+          cameraLocation: c.location,
+          deviceInfo: eg.cameraId || 'unknown',
+          resolution: '1080p',
+        }
+      } as any);
+    });
+  }
 
-// ─── TIMELINE ─────────────────────────────────────────────────────────────────
-export const mockTimeline: TimelineEvent[] = [
-  { id: 'tl-jack-01', caseId: 'case-jack', timestamp: '1888-08-31T03:40:00Z', title: 'Mary Ann Nichols Found – Buck\'s Row', description: 'First canonical victim discovered by Charles Cross and Robert Paul. Medical examination suggests murder occurred 30 minutes prior.', type: 'person_detected', source: 'Police Report', confidence: 95, significance: 'critical', verified: true, frameUrl: 'https://picsum.photos/seed/jframe01/640/360' },
-  { id: 'tl-jack-02', caseId: 'case-jack', timestamp: '1888-09-08T05:30:00Z', title: 'Annie Chapman Murder – Hanbury Street', description: 'Second canonical victim. Uterus removed — first indication of anatomical knowledge. Leather apron found nearby.', type: 'person_detected', source: 'Police Report', confidence: 97, significance: 'critical', verified: true, frameUrl: 'https://picsum.photos/seed/jframe02/640/360' },
-  { id: 'tl-cooper-01', caseId: 'case-cooper', timestamp: '1971-11-24T14:55:00Z', title: 'Dan Cooper Boards Flight 305', description: 'Subject purchases one-way ticket for $20 cash at Portland airport. Sits in row 18, seat E. Orders bourbon and soda. Passes note to stewardess Florence Schaffner.', type: 'person_detected', source: 'Airline Records / Witness', confidence: 98, significance: 'critical', verified: true, frameUrl: 'https://picsum.photos/seed/cframe01/640/360' },
-  { id: 'tl-cooper-02', caseId: 'case-cooper', timestamp: '1971-11-24T15:22:00Z', title: 'Hijack Demand Made', description: 'Cooper opens briefcase showing 8 red cylinders, wires, battery. Demands $200,000 in used $20 bills, 4 parachutes. Plane circles Seattle while demands negotiated.', type: 'weapon', source: 'Crew Statement', confidence: 96, significance: 'critical', verified: true },
-  { id: 'tl-cooper-03', caseId: 'case-cooper', timestamp: '1971-11-24T20:13:00Z', title: 'Cooper Jumps from Aircraft', description: 'NWA 305 now flying toward Mexico City. Cooper lowers rear airstair, jumps into darkness. Air temperature -7°C, wind 150 knots. Last seen over Ariel, Washington.', type: 'movement', source: 'Flight Crew', confidence: 92, significance: 'critical', verified: true, frameUrl: 'https://picsum.photos/seed/cframe03/640/360' },
-  { id: 'tl-001', caseId: 'case-001', timestamp: '2026-06-28T14:28:14Z', title: 'Suspects Arrive at Station', description: 'Two suspects entering Central Station via south entrance.', type: 'person_detected', source: 'CAM-STN-002', evidenceId: 'ev-002', suspects: ['sus-001', 'sus-002'], location: 'South Entrance', confidence: 91, significance: 'high', verified: true, frameUrl: 'https://picsum.photos/seed/frame001/640/360' },
-  { id: 'tl-002', caseId: 'case-001', timestamp: '2026-06-28T14:31:48Z', title: 'Suspects Approach Platform 4', description: 'Suspects move toward platform 4 where victim is waiting.', type: 'movement', source: 'CAM-STN-004', evidenceId: 'ev-001', suspects: ['sus-001', 'sus-002'], location: 'Platform 4 Access', confidence: 95, significance: 'critical', verified: true, frameUrl: 'https://picsum.photos/seed/frame002/640/360' },
-  { id: 'tl-003', caseId: 'case-001', timestamp: '2026-06-28T14:32:14Z', title: 'Robbery Initiated', description: 'Suspect Alpha confronts victim. Firearm detected.', type: 'weapon', source: 'CAM-STN-004', evidenceId: 'ev-001', suspects: ['sus-001'], location: 'Platform 4', confidence: 89, significance: 'critical', verified: true, frameUrl: 'https://picsum.photos/seed/frame003/640/360' },
-  { id: 'tl-004', caseId: 'case-001', timestamp: '2026-06-28T14:33:01Z', title: 'Suspects Flee – North Exit', description: 'Both suspects flee northward through emergency exit.', type: 'movement', source: 'CAM-STN-004', evidenceId: 'ev-001', suspects: ['sus-001', 'sus-002'], location: 'North Exit', confidence: 97, significance: 'critical', verified: true, frameUrl: 'https://picsum.photos/seed/frame004/640/360' },
-];
+  return evidences;
+});
 
-// ─── STATS, ALERTS, CHAT ──────────────────────────────────────────────────────
-export const mockDashboardStats: DashboardStats = {
-  activeCases: 6, totalEvidence: 396, processingQueue: 4,
-  alertsToday: 2, suspectsTracked: 29, reportsGenerated: 24,
-  aiAccuracy: 91.4, systemHealth: 'operational',
-};
+// Map Indian case timeline to TimelineEvent
+export const mockTimeline: TimelineEvent[] = indianCases.flatMap(c => {
+  if (!c.timeline) return [];
+  
+  return c.timeline.map((t, idx) => {
+    // Generate a full ISO string using the case's incidentDate base
+    const baseDate = new Date(c.incidentDate).toISOString().split('T')[0];
+    const timestamp = `${baseDate}T${t.time}:00Z`;
+    
+    return {
+      id: t.id || `tl-${c.id}-${idx}`,
+      caseId: c.id,
+      title: t.event,
+      description: t.event,
+      timestamp,
+      type: t.cameraId ? 'evidence_logged' : 'status_change',
+      source: 'system',
+      confidence: 1.0,
+      significance: 'medium',
+      verified: true,
+      metadata: {
+        location: c.location,
+        evidenceIds: t.cameraId ? [t.cameraId] : []
+      }
+    } as any;
+  });
+});
+
+// Map suspects to generic Suspect
+export const mockSuspects: Suspect[] = indianCases.flatMap(c => {
+  if (!c.metadata?.suspectProfiles) return [];
+  
+  return c.metadata.suspectProfiles.map(s => ({
+    id: s.id,
+    caseId: c.id,
+    name: s.name,
+    label: s.name,
+    description: s.description,
+    trackIds: [],
+    cameras: [],
+    appearances: 1,
+    firstSeen: c.incidentDate,
+    lastSeen: c.incidentDate,
+    alias: s.alias,
+    status: s.status === 'unidentified' ? 'unknown' : s.status === 'arrested' ? 'arrested' : s.status === 'identified' ? 'identified' : 'unknown',
+    riskLevel: s.confidence > 0.8 ? 'high' : s.confidence > 0.5 ? 'medium' : 'low',
+    attributes: {
+      ageRange: s.age ? `${s.age}-${s.age+5}` : undefined,
+      gender: s.gender,
+      height: s.description.includes('cm') || s.description.includes("'") ? s.description.split(',')[0] : undefined,
+      build: undefined,
+      hair: undefined,
+      eyes: undefined,
+      clothing: [],
+      accessories: [],
+      distinguishingFeatures: [s.distinguishingMarks || ''].filter(Boolean)
+    },
+    knownAssociates: [],
+    linkedCases: [c.id],
+    lastKnownLocation: s.lastKnownLocation || c.location,
+    notes: s.description,
+    confidence: s.confidence * 100,
+    imageUrl: `https://picsum.photos/seed/${s.id}/400/400`
+  } as any));
+});
 
 export const mockAlerts: Alert[] = [
-  { id: 'alert-001', caseId: 'case-jack', type: 'suspect_match', severity: 'critical', title: 'New DNA Match – Kosminski Sample', message: 'Updated mitochondrial DNA analysis of 1888 shawl fragment returns 99.2% match to Kosminski family lineage.', read: false, createdAt: '2026-06-30T08:00:00Z' },
-  { id: 'alert-002', caseId: 'case-cooper', type: 'processing_complete', severity: 'info', title: 'AI Processing Complete', message: 'FBI NORJAK files analysis complete. 11 suspects re-ranked by AI confidence. McCoy score updated to 55%.', read: false, createdAt: '2026-06-30T09:00:00Z' },
-  { id: 'alert-003', caseId: 'case-001', type: 'suspect_match', severity: 'warning', title: 'Suspect Alpha – ReID Match', message: 'Cross-camera re-identification matched Suspect Alpha on adjacent street cam 45 min after incident.', read: true, createdAt: '2026-06-28T15:22:00Z' },
+  { id: 'al-001', type: 'system', severity: 'info', title: 'New Case Assigned', message: 'Case PAN-IND-2026-0001 assigned to you', createdAt: '10m ago', read: false },
+  { id: 'al-002', type: 'processing_complete', severity: 'info', title: 'AI Processing Complete', message: 'CCTV analysis finished for PAN-IND-2026-0002', createdAt: '1h ago', read: false },
+  { id: 'al-003', type: 'new_evidence', severity: 'warning', title: 'Evidence Hash Mismatch', message: 'Chain of custody verification failed for item EG-003-1', createdAt: '2h ago', read: true },
 ];
 
 export const mockChatMessages: ChatMessage[] = [
-  { id: 'msg-001', role: 'user', content: 'Who are the primary suspects in the D.B. Cooper case?', timestamp: '2026-06-30T09:30:00Z' },
-  { id: 'msg-002', role: 'assistant', content: 'Based on analysis of 89 evidence items in case PAN-1971-0001, I have identified **11 suspects** across the investigation history.\n\n**Top AI-ranked suspects:**\n\n**1. Richard Floyd McCoy Jr.** — Confidence: 55%. Convicted of identical hijacking 5 months later. Matched physical description given by crew. FBI officially ruled out 1991 but methodology contested.\n\n**2. William J. Smith (alias candidate)** — Confidence: 44%. Paratrooper background, Northwest Airlines mechanic. Knew rear stair mechanism.\n\n**3. L.D. Cooper** — Confidence: 38%. Named by family member in 2011. Physical match to FBI sketch.\n\nNo confirmed identity. **$200,000 ransom remains missing** except $5,800 found on Columbia River bank in 1980.', timestamp: '2026-06-30T09:30:09Z', evidenceRefs: ['ev-cooper-01'], suspectRefs: ['sus-cooper-01'], confidence: 41, processingTime: 2100 },
+  { id: 'msg-1', role: 'assistant', content: 'Hello! I am PANOPTICON Copilot. I can help you analyze cases, cross-reference evidence, and suggest investigation strategies. How can I assist you today?', timestamp: new Date().toISOString() },
 ];
 
 export const mockReport: Report = {
-  id: 'rpt-001', caseId: 'case-jack', type: 'comprehensive',
-  title: 'AI Forensic Intelligence Report – Jack the Ripper (PAN-1888-0001)',
-  status: 'reviewed', generatedAt: '2026-06-30T10:00:00Z',
-  generatedBy: 'AI Assistant (Gemini Pro)', reviewedBy: 'Det. Sarah Kim',
-  summary: 'Comprehensive AI reanalysis of 1888 Whitechapel murders. 47 digitized evidence items processed. Kosminski hypothesis supported at 62% confidence based on DNA and behavioral analysis. Geographic profiling identifies residency consistent with Dorset Street/Greenfield Street area.',
-  sections: [
-    { id: 'sec-001', title: 'Case Overview', content: 'AI reconstruction of 1888 Whitechapel murders based on digitized historical records.', order: 1, type: 'text' },
-    { id: 'sec-002', title: 'Evidence Timeline', content: 'Reconstructed chronology of 5 canonical murders.', order: 2, type: 'timeline' },
-    { id: 'sec-003', title: 'Suspect Analysis', content: 'AI-ranked suspect profiles with confidence scores.', order: 3, type: 'suspect_profile' },
-  ],
-  version: 3,
-};
+  id: 'rep-001',
+  title: 'Quarterly Crime Trend Analysis',
+  type: 'tactical',
+  author: 'System',
+  createdAt: new Date().toISOString(),
+  status: 'draft',
+  content: '# Quarterly Crime Trend Analysis\n\nThis report summarizes the crime trends...',
+  tags: ['quarterly', 'trends'],
+  caseReferences: ['ind-case-001', 'ind-case-002']
+} as any;
+
+export const mockStats: DashboardStats = {
+  activeCases: indianCases.filter(c => c.status === 'active').length,
+  aiProcessingQueue: 12,
+  evidenceItems: mockEvidence.length,
+  recentActivity: [
+    { id: 'act-1', type: 'case_update', description: 'Updated status for PAN-IND-2026-0001', timestamp: '5m ago' },
+    { id: 'act-2', type: 'evidence_added', description: 'New CCTV footage uploaded', timestamp: '15m ago' },
+  ]
+} as any;

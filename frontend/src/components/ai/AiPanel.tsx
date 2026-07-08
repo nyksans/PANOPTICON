@@ -18,7 +18,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { useUIStore } from '@/store/uiStore';
-import { aiApi } from '@/lib/api';
+import { casesAPI, evidenceAPI, aiAPI } from '@/lib/api';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import type { ChatMessage } from '@/types';
 
@@ -62,7 +62,7 @@ export function AiPanel() {
 
     try {
       const caseId = selectedCaseId ?? 'case-001';
-      const result = await aiApi.chat(caseId, text, sessionId.current);
+      const { data: result } = await aiAPI.copilot(text, caseId, { sessionId: sessionId.current });
       const aiMsg: ChatMessage = {
         id: result.id,
         role: 'assistant',

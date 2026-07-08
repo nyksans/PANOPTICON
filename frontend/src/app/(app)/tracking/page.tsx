@@ -180,7 +180,7 @@ export default function TrackingPage() {
                   <p className="text-2xs font-mono text-muted-foreground/60 mt-0.5">{'caseNumber' in s ? (s as any).caseNumber : ''}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-2xs text-muted-foreground flex items-center gap-1">
-                      <Camera className="w-2.5 h-2.5" />{s.cameras.length} cams
+                      <Camera className="w-2.5 h-2.5" />{s.cameras?.length || 0} cams
                     </span>
                     <span className="text-2xs text-muted-foreground">{s.appearances} sightings</span>
                   </div>

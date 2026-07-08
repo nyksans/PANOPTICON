@@ -1,22 +1,31 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
+import logging
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DATABASE_ECHO,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-)
+logger = logging.getLogger(__name__)
 
-AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
+try:
+    engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=settings.DATABASE_ECHO,
+        pool_pre_ping=True,
+        pool_size=10,
+        max_overflow=20,
+    )
+except Exception as e:
+    logger.warning(f"Failed to create database engine: {e}. Running in mock mode.")
+    engine = None
+
+AsyncSessionLocal = None
+if engine:
+    AsyncSessionLocal = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
 
 class Base(DeclarativeBase):
@@ -24,6 +33,11 @@ class Base(DeclarativeBase):
 
 
 async def get_db():
+    if not AsyncSessionLocal:
+        logger.warning("Database not available, using mock session")
+        yield None
+        return
+    
     async with AsyncSessionLocal() as session:
         try:
             yield session

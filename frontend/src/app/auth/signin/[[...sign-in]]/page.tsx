@@ -6,7 +6,6 @@ import { motion } from 'framer-motion'
 export default function SignInPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000" />
@@ -18,7 +17,6 @@ export default function SignInPage() {
         transition={{ duration: 0.5 }}
         className="relative w-full max-w-md"
       >
-        {/* Clerk SignIn Component */}
         <div className="bg-white/10 dark:bg-slate-900/50 backdrop-blur-xl border border-white/20 dark:border-slate-700/50 rounded-2xl p-8 shadow-2xl">
           <motion.div
             initial={{ y: -20, opacity: 0 }}
@@ -67,12 +65,12 @@ export default function SignInPage() {
                   logoPlacement: 'none',
                 },
               }}
-              redirectUrl="/dashboard"
+              routing="path"
+              path="/auth/signin"
             />
           </motion.div>
         </div>
 
-        {/* Bottom Text */}
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -85,3 +83,4 @@ export default function SignInPage() {
     </div>
   )
 }
+

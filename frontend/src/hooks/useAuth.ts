@@ -8,7 +8,7 @@ export function useAuth() {
   const { user, isLoaded } = useUser()
   const { signOut, getToken } = useClerkAuth()
 
-  const userRole = user?.publicMetadata?.role || 'investigator'
+  const userRole = (user?.publicMetadata?.role as string) || 'investigator'
   const userBadge = user?.publicMetadata?.badge
   const userDepartment = user?.publicMetadata?.department
 

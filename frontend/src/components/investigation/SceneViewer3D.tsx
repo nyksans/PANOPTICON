@@ -362,32 +362,40 @@ function HeatmapPlane() {
 }
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
-function Scene({ progress, showEvidenceMarkers, showTrajectories, showHeatmap }: {
+function Scene({ 
+  progress, 
+  showEvidenceMarkers, 
+  showTrajectories, 
+  showHeatmap,
+  evidenceMarkers,
+  trajectories 
+}: {
   progress: number;
   showEvidenceMarkers: boolean;
   showTrajectories: boolean;
   showHeatmap: boolean;
+  evidenceMarkers: EvidenceMarker3D[];
+  trajectories: any[];
 }) {
   return (
     <>
-      <ambientLight intensity={0.25} color="#1a2744" />
-      <directionalLight position={[10, 20, 10]} intensity={0.7} color="#6da8ff" castShadow
-        shadow-mapSize={[1024, 1024]} />
-      <pointLight position={[5, 5, 0]} intensity={1.8} color="#f59e0b" distance={10} />
-      <pointLight position={[-5, 4, 0]} intensity={0.6} color="#00b4d8" distance={14} />
-      <pointLight position={[9, 3, -4]} intensity={0.5} color="#22c55e" distance={8} />
+      <ambientLight intensity={1.8} color="#c8d8f0" />
+      <directionalLight position={[10, 20, 10]} intensity={2.5} color="#ffffff" castShadow
+        shadow-mapSize={[2048, 2048]} />
+      <directionalLight position={[-10, 15, -10]} intensity={1.2} color="#daeaf8" />
+      <pointLight position={[5, 5, 0]} intensity={3.0} color="#fbbf24" distance={18} />
+      <pointLight position={[-5, 4, 0]} intensity={2.0} color="#38e1ff" distance={20} />
+      <pointLight position={[9, 3, -4]} intensity={1.5} color="#4ade80" distance={14} />
       <StationFloor />
       {showHeatmap && <HeatmapPlane />}
       {CAMERAS.map(cam => <CameraModel key={cam.id} cam={cam} />)}
-      {showTrajectories && (
-        <>
-          <TrajectorySmoke waypoints={ALPHA_PATH} color="#f59e0b" />
-          <TrajectorySmoke waypoints={BETA_PATH} color="#fb923c" />
-        </>
-      )}
-      <PathTrail waypoints={ALPHA_PATH} color="#f59e0b" progress={progress} />
-      <PathTrail waypoints={BETA_PATH} color="#fb923c" progress={progress} />
-      {showEvidenceMarkers && EVIDENCE_MARKERS.map(m => (
+      {showTrajectories && trajectories.map((traj, idx) => (
+        <TrajectorySmoke key={`smoke-${idx}`} waypoints={traj.waypoints} color={traj.color} />
+      ))}
+      {trajectories.map((traj, idx) => (
+        <PathTrail key={`trail-${idx}`} waypoints={traj.waypoints} color={traj.color} progress={progress} />
+      ))}
+      {showEvidenceMarkers && evidenceMarkers.map(m => (
         <EvidenceMarker3D key={m.id} marker={m} />
       ))}
       <OrbitControls
@@ -421,9 +429,19 @@ function SceneLegend() {
 }
 
 // ── Public export ─────────────────────────────────────────────────────────────
-interface SceneViewerProps { currentTime: number; className?: string; }
+interface SceneViewerProps { 
+  currentTime: number; 
+  className?: string; 
+  evidenceMarkers?: EvidenceMarker3D[];
+  trajectories?: any[];
+}
 
-export function SceneViewer3D({ currentTime, className = '' }: SceneViewerProps) {
+export function SceneViewer3D({ 
+  currentTime, 
+  className = '',
+  evidenceMarkers = [],
+  trajectories = []
+}: SceneViewerProps) {
   const [ready, setReady] = useState(false);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showEvidenceMarkers, setShowEvidenceMarkers] = useState(true);
@@ -475,7 +493,7 @@ export function SceneViewer3D({ currentTime, className = '' }: SceneViewerProps)
       {showEvidenceMarkers && (
         <div className="absolute bottom-8 left-3 z-10 flex items-center gap-1.5 text-2xs font-mono bg-black/65 px-2 py-1 rounded-md backdrop-blur-sm"
           style={{ color: '#22c55e', border: '1px solid rgba(34,197,94,0.25)' }}>
-          <Target className="w-3 h-3" /> {EVIDENCE_MARKERS.length} evidence markers
+          <Target className="w-3 h-3" /> {evidenceMarkers.length} evidence markers
         </div>
       )}
 
@@ -487,9 +505,9 @@ export function SceneViewer3D({ currentTime, className = '' }: SceneViewerProps)
       <Canvas
         shadows
         camera={{ position: [0, 16, 22], fov: 42, near: 0.1, far: 200 }}
-        gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.9 }}
+        gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.4 }}
         dpr={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 1.5) : 1}
-        onCreated={({ gl }) => { gl.setClearColor('#050911'); }}
+        onCreated={({ gl }) => { gl.setClearColor('#0d1525'); }}
       >
         <Suspense fallback={null}>
           <Scene
@@ -497,6 +515,8 @@ export function SceneViewer3D({ currentTime, className = '' }: SceneViewerProps)
             showEvidenceMarkers={showEvidenceMarkers}
             showTrajectories={showTrajectories}
             showHeatmap={showHeatmap}
+            evidenceMarkers={evidenceMarkers}
+            trajectories={trajectories}
           />
         </Suspense>
       </Canvas>

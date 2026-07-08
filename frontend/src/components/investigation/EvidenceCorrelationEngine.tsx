@@ -191,26 +191,43 @@ function TrajectoryPanel({ trajectories }: { trajectories: SuspectTrajectory[] }
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
-export function EvidenceCorrelationEngine() {
-  const [selected, setSelected] = useState<EvidenceCorrelation | null>(EVIDENCE_CORRELATIONS[0]);
+export function EvidenceCorrelationEngine({
+  correlations = [],
+  trajectories = []
+}: {
+  correlations?: EvidenceCorrelation[];
+  trajectories?: SuspectTrajectory[];
+}) {
+  // Fallback to imported mock data if none provided (for other pages that might use it)
+  const activeCorrelations = correlations.length > 0 ? correlations : EVIDENCE_CORRELATIONS;
+  const activeTrajectories = trajectories.length > 0 ? trajectories : SUSPECT_TRAJECTORIES;
+
+  const [selected, setSelected] = useState<EvidenceCorrelation | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('all');
   const [tab, setTab] = useState<'correlations' | 'trajectories'>('correlations');
 
+  // Auto-select first item when data loads
+  React.useEffect(() => {
+    if (activeCorrelations.length > 0 && !selected) {
+      setSelected(activeCorrelations[0]);
+    }
+  }, [activeCorrelations, selected]);
+
   const filtered = useMemo(() => {
-    let list = EVIDENCE_CORRELATIONS;
+    let list = activeCorrelations;
     if (filter !== 'all') list = list.filter(c => c.type === filter);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(c => c.title.toLowerCase().includes(q));
     }
     return list;
-  }, [filter, search]);
+  }, [filter, search, activeCorrelations]);
 
-  const confirmedCount = EVIDENCE_CORRELATIONS.filter(c => c.status === 'confirmed').length;
-  const avgConfidence = Math.round(
-    EVIDENCE_CORRELATIONS.reduce((s, c) => s + c.confidence, 0) / EVIDENCE_CORRELATIONS.length
-  );
+  const confirmedCount = activeCorrelations.filter(c => c.status === 'confirmed').length;
+  const avgConfidence = activeCorrelations.length > 0 
+    ? Math.round(activeCorrelations.reduce((s, c) => s + c.confidence, 0) / activeCorrelations.length)
+    : 0;
 
   return (
     <div className="flex h-full overflow-hidden bg-[#040810]">
@@ -225,10 +242,10 @@ export function EvidenceCorrelationEngine() {
           {/* Summary stats */}
           <div className="grid grid-cols-2 gap-2 mb-3">
             {[
-              { label: 'Correlations', value: EVIDENCE_CORRELATIONS.length, color: '#00b4d8' },
+              { label: 'Correlations', value: activeCorrelations.length, color: '#00b4d8' },
               { label: 'Confirmed', value: confirmedCount, color: '#22c55e' },
               { label: 'Avg Confidence', value: `${avgConfidence}%`, color: '#f59e0b' },
-              { label: 'Trajectories', value: SUSPECT_TRAJECTORIES.length, color: '#a78bfa' },
+              { label: 'Trajectories', value: activeTrajectories.length, color: '#a78bfa' },
             ].map(stat => (
               <div key={stat.label} className="p-2 rounded-lg border border-border text-center"
                 style={{ background: `${stat.color}08` }}>
@@ -275,13 +292,18 @@ export function EvidenceCorrelationEngine() {
                   isSelected={selected?.id === corr.id}
                   onClick={() => setSelected(corr)} />
               ))}
+              {filtered.length === 0 && (
+                <div className="p-4 text-center text-xs text-muted-foreground">
+                  No correlations found for the uploaded evidence.
+                </div>
+              )}
             </div>
           </>
         )}
 
         {tab === 'trajectories' && (
           <div className="flex-1 overflow-y-auto no-scrollbar p-3">
-            <TrajectoryPanel trajectories={SUSPECT_TRAJECTORIES} />
+            <TrajectoryPanel trajectories={activeTrajectories} />
           </div>
         )}
       </div>
@@ -306,7 +328,10 @@ export function EvidenceCorrelationEngine() {
             <p className="text-xs text-muted-foreground mb-4">
               Cross-camera movement reconstruction validated against Market-1501 dataset. Each waypoint confirmed via independent camera feed.
             </p>
-            {SUSPECT_TRAJECTORIES.map(traj => (
+            {activeTrajectories.length === 0 && (
+              <p className="text-sm text-muted-foreground italic">No trajectories found for the current evidence.</p>
+            )}
+            {activeTrajectories.map(traj => (
               <div key={traj.suspectId} className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-3 h-3 rounded-full" style={{ background: traj.color, boxShadow: `0 0 6px ${traj.color}` }} />

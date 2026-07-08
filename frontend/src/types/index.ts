@@ -356,3 +356,103 @@ export interface UIState {
   notifications: Alert[];
   unreadCount: number;
 }
+
+// --- Indian Case Extensions ---
+export interface VictimInfo {
+  name: string;
+  age: number;
+  gender: string;
+  occupation: string;
+  address: string;
+  injuries?: string;
+  status: 'alive' | 'deceased' | 'critical' | 'missing';
+}
+
+export interface SuspectProfile {
+  id: string;
+  name: string;
+  alias?: string;
+  age: number;
+  gender: string;
+  description: string;
+  distinguishingMarks?: string;
+  lastKnownLocation?: string;
+  vehicleInfo?: string;
+  status: 'identified' | 'unidentified' | 'arrested' | 'absconding' | 'cleared';
+  confidence: number;
+}
+
+export interface CCTVCamera {
+  id: string;
+  label: string;
+  location: string;
+  type: 'fixed' | 'ptz' | 'dome' | 'bodycam' | 'drone' | 'dashcam' | 'mobile';
+  resolution: string;
+  status: 'active' | 'offline' | 'recovered';
+  coverageArea: string;
+  footageAvailable: boolean;
+  timestampRange?: { start: string; end: string };
+}
+
+export interface EvidenceGalleryItem {
+  id: string;
+  type: 'cctv_frame' | 'bodycam_still' | 'drone_aerial' | 'mobile_capture' | 'forensic_photo' | 'document_scan';
+  caption: string;
+  timestamp: string;
+  cameraId?: string;
+  thumbnailUrl: string;
+}
+
+export interface InvestigationNote {
+  id: string;
+  author: string;
+  rank: string;
+  timestamp: string;
+  content: string;
+  category: 'observation' | 'forensic' | 'witness' | 'ai_insight' | 'command';
+}
+
+export interface CustodyEntry {
+  timestamp: string;
+  action: string;
+  officer: string;
+  rank: string;
+  location: string;
+  hash?: string;
+}
+
+export interface IndianCaseMetadata {
+  firNumber: string;
+  policeStation: string;
+  district: string;
+  state: string;
+  ipcSections: string[];
+  leadIO: string;
+  ioRank: string;
+  ioPhone: string;
+  victims: VictimInfo[];
+  suspectProfiles: SuspectProfile[];
+  cctvCameras: CCTVCamera[];
+  evidenceGallery: EvidenceGalleryItem[];
+  investigationNotes: InvestigationNote[];
+  pendingTasks: string[];
+  chainOfCustody: CustodyEntry[];
+  investigationProgress: number;
+  gpsCenter: { lat: number; lng: number };
+}
+
+export interface IndianCase extends Case {
+  metadata: IndianCaseMetadata;
+  timeline: IndianTimelineEntry[];
+  aiSummary: string;
+}
+
+export interface IndianTimelineEntry {
+  id: string;
+  time: string;
+  event: string;
+  significance: 'critical' | 'high' | 'medium' | 'low';
+  cameraId?: string;
+  personIds?: string[];
+  objectIds?: string[];
+}

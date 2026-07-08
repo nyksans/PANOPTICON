@@ -1,10 +1,16 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator, ConfigDict
 from typing import List, Optional
 import os
 
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(
+        extra="ignore",
+        case_sensitive=True,
+        env_file=".env"
+    )
+    
     # App
     APP_NAME: str = "PANOPTICON API"
     APP_VERSION: str = "1.0.0"
@@ -18,11 +24,16 @@ class Settings(BaseSettings):
     RELOAD: bool = True
 
     # CORS
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-    ]
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001"
+    
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, list):
+            return ",".join(v)
+        if isinstance(v, str):
+            return v
+        return "http://localhost:3000"
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://panopticon:panopticon@localhost:5432/panopticon"
@@ -66,9 +77,12 @@ class Settings(BaseSettings):
     PROCESSING_WORKERS: int = 2
     GPU_ENABLED: bool = False
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
-
-settings = Settings()
+try:
+    settings = Settings()
+except Exception as e:
+    print(f"Warning: Settings validation error: {e}")
+    # Fallback to minimal settings
+    settings = Settings(
+        CORS_ORIGINS="http://localhost:3000,http://localhost:8000"
+    )

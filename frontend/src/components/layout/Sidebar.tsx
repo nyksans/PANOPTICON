@@ -7,17 +7,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, FolderOpen, Film, Search,
   BrainCircuit, FileText, Settings, ChevronLeft,
-  Eye, Zap, Activity, Users, Radio, Database,
+  Eye, Zap, Activity, Users, Radio, Database, BookOpen
 } from 'lucide-react';
 import { cn, initials } from '@/lib/utils';
 import { useUIStore } from '@/store/uiStore';
-import { useAuthStore } from '@/store/authStore';
+import { useUser } from '@clerk/nextjs';
 
 const NAV = [
   {
     label: 'Operations',
     items: [
       { href: '/dashboard',    label: 'Dashboard',      icon: LayoutDashboard },
+      { href: '/prebuilt-cases', label: 'Case Library', icon: BookOpen, badge: 'IN' },
       { href: '/cases',        label: 'Cases',          icon: FolderOpen      },
       { href: '/evidence',     label: 'Evidence',       icon: Film            },
     ],
@@ -46,9 +47,11 @@ const NAV = [
 ];
 
 export function Sidebar() {
-  const pathname        = usePathname();
+  const pathname = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
-  const { user }        = useAuthStore();
+  const { user: clerkUser } = useUser();
+  const displayName = clerkUser?.fullName || clerkUser?.firstName || clerkUser?.emailAddresses?.[0]?.emailAddress?.split('@')[0] || 'Analyst';
+  const displayRole = (clerkUser?.publicMetadata?.role as string) || 'Investigator';
 
   return (
     <motion.aside
@@ -56,10 +59,10 @@ export function Sidebar() {
       animate={{ width: sidebarCollapsed ? 60 : 220 }}
       transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
       className="relative flex flex-col h-full shrink-0 overflow-hidden z-30"
-      style={{ background: 'linear-gradient(180deg, #04060e 0%, #060a16 100%)', borderRight: '1px solid rgba(255,255,255,0.06)' }}
+      style={{ background: 'var(--bg-base)', borderRight: '1px solid var(--border)' }}
     >
       {/* ── Logo ── */}
-      <div className="flex items-center h-14 px-3.5 border-b border-white/5 shrink-0 gap-3">
+      <div className="flex items-center h-14 px-3.5 shrink-0 gap-3" style={{ borderBottom: '1px solid var(--border)' }}>
         <div className="relative shrink-0 w-8 h-8">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #00b4d8, #1565c0)' }}>
             <Eye className="w-4 h-4 text-white" />
@@ -146,17 +149,17 @@ export function Sidebar() {
       </AnimatePresence>
 
       {/* ── User row ── */}
-      <div style={{ borderTop:'1px solid rgba(255,255,255,0.05)' }} className="p-3 shrink-0">
+      <div style={{ borderTop:'1px solid var(--border)' }} className="p-3 shrink-0">
         <div className={cn('flex items-center gap-2.5', sidebarCollapsed && 'justify-center')}>
           <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white"
             style={{ background:'linear-gradient(135deg,#1565c0,#00b4d8)' }}>
-            {user ? initials(user.name) : 'AN'}
+            {initials(displayName)}
           </div>
           <AnimatePresence>
             {!sidebarCollapsed && (
               <motion.div initial={{ opacity:0, x:-6 }} animate={{ opacity:1, x:0 }} exit={{ opacity:0, x:-6 }} className="flex-1 overflow-hidden min-w-0">
-                <p className="text-xs font-semibold truncate">{user?.name ?? 'Analyst'}</p>
-                <p className="text-[10px] text-muted-foreground/50 capitalize truncate">{user?.role ?? 'investigator'}</p>
+                <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{displayName}</p>
+                <p className="text-[10px] capitalize truncate" style={{ color: 'var(--text-dim)' }}>{displayRole}</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -166,7 +169,7 @@ export function Sidebar() {
       {/* ── Collapse toggle ── */}
       <button onClick={toggleSidebar}
         className="absolute -right-3 top-14 w-6 h-6 rounded-full border border-border/60 flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-accent/40 transition-colors z-50"
-        style={{ background:'#0d1526' }}
+        style={{ background:'var(--bg-elevated)' }}
         aria-label={sidebarCollapsed ? 'Expand' : 'Collapse'}>
         <motion.div animate={{ rotate: sidebarCollapsed ? 180 : 0 }} transition={{ duration:0.2 }}>
           <ChevronLeft className="w-3 h-3" />

@@ -65,7 +65,8 @@ export default function SignUpPage() {
                   logoPlacement: 'none',
                 },
               }}
-              redirectUrl="/dashboard"
+              routing="path"
+              path="/auth/signup"
             />
           </motion.div>
         </div>

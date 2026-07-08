@@ -16,7 +16,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from app.core.config import settings
-from app.api.routes import auth, cases, evidence, ai, dashboard
+from app.api.routes import auth, cases, evidence, ai, dashboard, prebuilt_cases
 from app.api.routes import datasets as datasets_router
 
 
@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
         try:
             from app.db.base import engine, Base
             # Import all models so Base.metadata is populated
-            from app.models import case, evidence as evidence_model  # noqa: F401
+            from app.models import case, evidence as evidence_model, user  # noqa: F401
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
             logger.info("Database tables verified/created")
@@ -99,6 +99,7 @@ app.include_router(cases.router, prefix=API_PREFIX)
 app.include_router(evidence.router, prefix=API_PREFIX)
 app.include_router(ai.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)
+app.include_router(prebuilt_cases.router, prefix=API_PREFIX)
 app.include_router(datasets_router.router)
 
 # Static files for local storage

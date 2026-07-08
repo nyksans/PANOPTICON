@@ -1,72 +1,99 @@
 'use client';
 
-import { useState } from 'react';
-import { THEMES, getTheme, setTheme, type Theme } from '@/lib/theme';
-import { AlertCircle } from 'lucide-react';
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { useState, useEffect } from 'react';
+import { THEMES, getTheme, setTheme as applyTheme, type Theme } from '@/lib/theme';
+import { Palette, Check, X } from 'lucide-react';
 
 export function ThemeSwitcher() {
-  const [currentTheme, setCurrentTheme] = useState<Theme>(() => getTheme());
+  const [currentTheme, setCurrentTheme] = useState<Theme>('dark');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setCurrentTheme(getTheme());
+  }, []);
 
   const handleThemeChange = (theme: Theme) => {
-    setTheme(theme);
+    applyTheme(theme);
     setCurrentTheme(theme);
+    setOpen(false);
   };
 
-  const currentThemeConfig = THEMES.find((t) => t.id === currentTheme);
+  const currentConfig = THEMES.find(t => t.id === currentTheme);
 
   return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-var(--border) hover:bg-var(--bg-overlay) transition-colors cursor-pointer">
-          <span className="text-lg">{currentThemeConfig?.icon}</span>
-          <span className="hidden sm:inline text-var(--text-secondary)">{currentThemeConfig?.name}</span>
-        </button>
-      </DropdownMenu.Trigger>
+    <div className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Change Theme"
+        className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-sm font-medium"
+        style={{
+          background: 'var(--bg-elevated)',
+          borderColor: 'var(--border-bright)',
+          color: 'var(--text-primary)',
+        }}
+      >
+        <span className="text-base leading-none">{currentConfig?.icon}</span>
+        <span className="hidden sm:inline" style={{ color: 'var(--text-secondary)' }}>
+          {currentConfig?.name}
+        </span>
+        <Palette className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+      </button>
 
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          className="glass min-w-64 rounded-lg p-2 shadow-2xl z-50"
-          align="end"
-          sideOffset={8}
-        >
-          {/* Serious Mode Warning */}
-          <div className="px-3 py-2 mb-2">
-            <div className="flex items-start gap-2 p-2 bg-var(--danger)/10 border border-var(--danger)/25 rounded-md">
-              <AlertCircle className="w-4 h-4 text-var(--danger) mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-var(--text-secondary)">
-                Use "Serious Mode" for critical investigations
-              </p>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+
+          {/* Panel */}
+          <div
+            className="absolute right-0 top-12 z-50 w-72 rounded-2xl shadow-2xl border p-3"
+            style={{
+              background: 'var(--bg-surface)',
+              borderColor: 'var(--border-bright)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+            }}
+          >
+            <div className="flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center gap-2">
+                <Palette className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Appearance
+                </span>
+              </div>
+              <button onClick={() => setOpen(false)} style={{ color: 'var(--text-dim)' }}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              {THEMES.map(theme => (
+                <button
+                  key={theme.id}
+                  onClick={() => handleThemeChange(theme.id)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left group"
+                  style={{
+                    background: currentTheme === theme.id ? 'var(--accent-dim)' : 'transparent',
+                    borderLeft: currentTheme === theme.id ? '2px solid var(--accent)' : '2px solid transparent',
+                  }}
+                >
+                  <span className="text-xl">{theme.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {theme.name}
+                    </div>
+                    <div className="text-xs truncate mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                      {theme.description}
+                    </div>
+                  </div>
+                  {currentTheme === theme.id && (
+                    <Check className="w-4 h-4 shrink-0" style={{ color: 'var(--accent)' }} />
+                  )}
+                </button>
+              ))}
             </div>
           </div>
-
-          <DropdownMenu.Separator className="my-2 bg-var(--border)" />
-
-          {THEMES.map((theme) => (
-            <DropdownMenu.Item key={theme.id} asChild>
-              <button
-                onClick={() => handleThemeChange(theme.id)}
-                className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-md text-left transition-all group ${
-                  currentTheme === theme.id
-                    ? 'bg-var(--accent)/15 border-l-2 border-l-var(--accent)'
-                    : 'hover:bg-var(--bg-overlay)'
-                }`}
-              >
-                <span className="text-xl mt-1">{theme.icon}</span>
-                <div className="flex-1">
-                  <div className="font-medium text-var(--text-primary)">{theme.name}</div>
-                  <div className="text-xs text-var(--text-secondary)">{theme.description}</div>
-                </div>
-                {currentTheme === theme.id && (
-                  <div className="w-2 h-2 rounded-full bg-var(--accent) mt-2" />
-                )}
-              </button>
-            </DropdownMenu.Item>
-          ))}
-
-          <DropdownMenu.Arrow className="fill-var(--bg-surface)" />
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+        </>
+      )}
+    </div>
   );
 }

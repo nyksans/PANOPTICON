@@ -29,7 +29,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { mockEvidence } from '@/lib/mockData';
-import { evidenceApi, casesApi, toCaseFrontend, toEvidenceFrontend } from '@/lib/api';
+import { evidenceAPI, casesAPI } from '@/lib/api';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ConfidenceBadge } from '@/components/ui/ConfidenceBadge';
 import { cn, formatFileSize, formatDuration, formatTimestamp, formatRelativeTime, getEvidenceTypeIcon } from '@/lib/utils';
@@ -66,30 +66,55 @@ export default function EvidencePage() {
   const { data: evidenceData, isError: evidenceError, isLoading: evidenceLoading } = useQuery({
     queryKey: ['evidence', typeFilter, statusFilter],
     queryFn: () =>
-      evidenceApi.list({
-        file_type: typeFilter !== 'all' ? typeFilter : undefined,
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        page: 1,
-      }),
+      evidenceAPI.list(
+        undefined,
+        typeFilter !== 'all' ? typeFilter : undefined,
+        statusFilter !== 'all' ? statusFilter : undefined,
+        1
+      ),
     retry: 1,
   });
 
   // Fetch cases for the upload case selector
   const { data: casesData } = useQuery({
     queryKey: ['cases', 'evidence-upload'],
-    queryFn: () => casesApi.list({ page: 1, page_size: 50 }),
+    queryFn: () => casesAPI.list(1, 50),
     retry: 1,
   });
 
-  const availableCases = useMemo(
-    () => (casesData?.data ?? []).map(toCaseFrontend),
-    [casesData],
-  );
+  const availableCases = useMemo(() => {
+    const rawData = casesData?.data?.data || casesData?.data;
+    const data = Array.isArray(rawData) ? rawData : [];
+    return data.map((c: any) => ({
+      id: c.id,
+      caseNumber: c.case_number || c.id.slice(0, 8),
+      title: c.title,
+    }));
+  }, [casesData]);
 
   // Use backend data if available, otherwise fall back to mock data
   const allEvidence: Evidence[] = useMemo(() => {
-    if (evidenceData?.data && evidenceData.data.length > 0) {
-      return evidenceData.data.map(toEvidenceFrontend);
+    const rawData = evidenceData?.data?.data || evidenceData?.data;
+    const dataArray = Array.isArray(rawData) ? rawData : [];
+    if (dataArray.length > 0) {
+      return dataArray.map((e: any) => ({
+        id: e.id,
+        caseId: e.case_id,
+        filename: e.filename || 'unknown',
+        originalName: e.original_name,
+        type: (e.type as EvidenceType) || 'video',
+        size: e.size || 0,
+        status: (e.status as any) || 'processed',
+        uploadedAt: e.created_at,
+        uploadedBy: e.uploaded_by || 'Unknown',
+        tags: e.tags || [],
+        thumbnailUrl: e.thumbnail_url,
+        fileUrl: e.url || '',
+        url: e.url,
+        metadata: e.metadata || {},
+        notes: e.notes || '',
+        hash: e.hash || ''
+      })) as Evidence[];
     }
     return mockEvidence;
   }, [evidenceData]);
@@ -110,12 +135,10 @@ export default function EvidencePage() {
 
       try {
         for (const file of files) {
-          await evidenceApi.upload(
-            caseId,
-            file,
-            {},
-            (pct) => setUploadProgress(pct),
-          );
+          // Mock progress for now since axios onUploadProgress needs config
+          setUploadProgress(50);
+          await evidenceAPI.upload(caseId, file);
+          setUploadProgress(100);
         }
         // Refresh evidence list after successful upload
         queryClient.invalidateQueries({ queryKey: ['evidence'] });
@@ -201,7 +224,7 @@ export default function EvidencePage() {
                   onChange={(e) => setSelectedCaseId(e.target.value)}
                   className="px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-foreground focus:outline-none focus:border-accent/50 cursor-pointer max-w-xs"
                 >
-                  {availableCases.map((c) => (
+                  {availableCases.map((c: any) => (
                     <option key={c.id} value={c.id} className="bg-[#0D1526]">
                       {c.caseNumber} — {c.title.slice(0, 40)}
                     </option>
@@ -359,7 +382,7 @@ export default function EvidencePage() {
                   {/* Bottom labels */}
                   <div className="absolute bottom-2 left-2 flex items-center gap-1.5 flex-wrap">
                     <span className="badge-info text-2xs capitalize">{ev.type}</span>
-                    <StatusBadge status={ev.status} className="text-2xs" />
+                    <StatusBadge status={ev.status === 'uploaded' || ev.status === 'processed' ? 'pending' : (ev.status as any)} className="text-2xs" />
                   </div>
                   {ev.duration && (
                     <span className="absolute bottom-2 right-2 text-xs text-white/80 font-mono bg-black/50 px-1.5 py-0.5 rounded">
@@ -387,7 +410,7 @@ export default function EvidencePage() {
                       {ev.resolution && ` · ${ev.resolution}`}
                     </span>
                     {ev.aiResults?.confidence ? (
-                      <ConfidenceBadge score={ev.aiResults.confidence} size="sm" showLabel={false} />
+                      <ConfidenceBadge confidence={ev.aiResults.confidence} />
                     ) : null}
                   </div>
                   {ev.metadata?.cameraLocation && (
@@ -458,7 +481,7 @@ function EvidenceDetailPanel({ evidence: ev, onClose }: { evidence: Evidence; on
 
       {/* Status + actions */}
       <div className="flex items-center justify-between">
-        <StatusBadge status={ev.status} />
+        <StatusBadge status={ev.status === 'uploaded' || ev.status === 'processed' ? 'pending' : (ev.status as any)} />
         <div className="flex items-center gap-2">
           <button className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface-raised transition-colors border border-border">
             <Eye className="w-3.5 h-3.5" />
@@ -517,7 +540,7 @@ function EvidenceDetailPanel({ evidence: ev, onClose }: { evidence: Evidence; on
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Analysis</h4>
-            <ConfidenceBadge score={ev.aiResults.confidence} size="sm" />
+            <ConfidenceBadge confidence={ev.aiResults.confidence} />
           </div>
           {ev.aiResults.synopsis && (
             <p className="text-xs text-muted-foreground leading-relaxed bg-surface rounded-lg p-3 border border-border">

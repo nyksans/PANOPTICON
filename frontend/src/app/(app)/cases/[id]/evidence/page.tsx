@@ -272,7 +272,7 @@ export default function EvidencePage() {
                               variant="outline"
                               className="flex-1"
                               onClick={() => handleAnalyze(item.id)}
-                              disabled={item.status === 'analyzing'}
+                              disabled={(item.status as string) === 'analyzing'}
                             >
                               <Zap className="w-3 h-3 mr-1" />
                               Analyze

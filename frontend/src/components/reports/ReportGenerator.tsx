@@ -1,0 +1,166 @@
+'use client';
+
+import React, { useState } from 'react';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { Download, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+interface ReportGeneratorProps {
+  caseData: any;
+  evidence: any[];
+}
+
+export function ReportGenerator({ caseData, evidence }: ReportGeneratorProps) {
+  const [generating, setGenerating] = useState(false);
+
+  const generatePDF = async () => {
+    try {
+      setGenerating(true);
+      toast.info('Generating PDF report. Please wait...');
+
+      // 1. Create a hidden element in the DOM to render the report visually
+      const reportDiv = document.createElement('div');
+      reportDiv.style.position = 'absolute';
+      reportDiv.style.left = '-9999px';
+      reportDiv.style.top = '0';
+      reportDiv.style.width = '800px';
+      reportDiv.style.padding = '40px';
+      reportDiv.style.background = '#ffffff'; // White background for PDF
+      reportDiv.style.color = '#000000'; // Black text for PDF
+      reportDiv.style.fontFamily = 'sans-serif';
+      
+      const timelineItems = (caseData.metadata?.dynamicTimelineEvents || []).map(
+        (t: any) => `<li><strong>${t.time}</strong>: ${t.event}</li>`
+      ).join('');
+
+      const correlationItems = (caseData.metadata?.dynamicCorrelations || []).map(
+        (c: any) => `<li><strong>${c.title}</strong> (${c.type.replace('_', ' ')}) - Confidence: ${c.confidence}%</li>`
+      ).join('');
+
+      const evidenceItems = evidence.map(
+        (e: any) => `<li>${e.original_name} (${e.file_type || 'unknown'})</li>`
+      ).join('');
+
+      reportDiv.innerHTML = `
+        <div style="border-bottom: 2px solid #00b4d8; padding-bottom: 20px; margin-bottom: 30px;">
+          <h1 style="margin: 0; color: #1a2a40; font-size: 32px;">Forensic Case Report</h1>
+          <p style="margin: 5px 0 0 0; color: #64748b; font-size: 14px;">Case ID: ${caseData.case_number}</p>
+        </div>
+        
+        <h2 style="color: #1a2a40; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Case Details</h2>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: bold; width: 30%;">Title</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${caseData.title}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: bold;">Priority / Category</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; text-transform: capitalize;">${caseData.priority} / ${caseData.category}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: bold;">Location</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${caseData.location || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: bold;">Incident Date</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${new Date(caseData.incident_date || caseData.created_at).toLocaleString('en-IN')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border: 1px solid #e2e8f0; background: #f8fafc; font-weight: bold;">AI Processed</td>
+            <td style="padding: 8px; border: 1px solid #e2e8f0;">${caseData.ai_processed ? 'Yes' : 'No'}</td>
+          </tr>
+        </table>
+
+        <h2 style="color: #1a2a40; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Description</h2>
+        <p style="font-size: 14px; line-height: 1.6; margin-bottom: 30px;">${caseData.description || 'No description provided.'}</p>
+
+        <h2 style="color: #1a2a40; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Timeline of Events</h2>
+        <ul style="font-size: 14px; line-height: 1.8; margin-bottom: 30px; padding-left: 20px;">
+          <li><strong>${new Date(caseData.created_at).toLocaleString('en-IN')}</strong>: Case Created</li>
+          ${timelineItems || '<li>No dynamic timeline events available.</li>'}
+        </ul>
+
+        <h2 style="color: #1a2a40; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Identified Correlations</h2>
+        <ul style="font-size: 14px; line-height: 1.8; margin-bottom: 30px; padding-left: 20px;">
+          ${correlationItems || '<li>No correlations detected.</li>'}
+        </ul>
+
+        <h2 style="color: #1a2a40; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">Logged Evidence (${evidence.length})</h2>
+        <ul style="font-size: 14px; line-height: 1.8; margin-bottom: 30px; padding-left: 20px;">
+          ${evidenceItems || '<li>No evidence items uploaded.</li>'}
+        </ul>
+
+        <div style="margin-top: 50px; text-align: center; color: #94a3b8; font-size: 12px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+          Generated by PANOPTICON Forensic Engine on ${new Date().toLocaleString('en-IN')}
+        </div>
+      `;
+
+      document.body.appendChild(reportDiv);
+
+      // 2. Capture the element using html2canvas
+      const canvas = await html2canvas(reportDiv, {
+        scale: 2, // High resolution
+        useCORS: true,
+        logging: false,
+      });
+
+      document.body.removeChild(reportDiv);
+
+      // 3. Convert canvas to PDF
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Case_${caseData.case_number}_Report.pdf`);
+
+      toast.success('PDF report generated successfully!');
+    } catch (err: any) {
+      console.error('PDF Generation Error:', err);
+      toast.error('Failed to generate PDF: ' + err.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center p-8 bg-surface-raised rounded-2xl border border-border mt-4 max-w-lg mx-auto">
+      <div className="w-16 h-16 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center mb-4">
+        {generating ? (
+          <Loader2 className="w-8 h-8 text-accent animate-spin" />
+        ) : (
+          <Download className="w-8 h-8 text-accent" />
+        )}
+      </div>
+      
+      <h3 className="text-lg font-bold text-foreground mb-2">Export Forensic Report</h3>
+      <p className="text-sm text-muted-foreground text-center mb-6 max-w-sm">
+        Generate a comprehensive, immutable PDF document containing the case details, evidence logs, dynamic timeline, and AI correlation insights.
+      </p>
+
+      <button
+        onClick={generatePDF}
+        disabled={generating}
+        className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all shadow-[0_0_15px_rgba(0,180,216,0.3)] disabled:opacity-50 disabled:shadow-none"
+        style={{ background: 'linear-gradient(135deg,#00b4d8,#1565c0)', color: 'white' }}
+      >
+        {generating ? (
+          <>
+            <Loader2 className="w-5 h-5 animate-spin" /> Generating...
+          </>
+        ) : (
+          <>
+            <Download className="w-5 h-5" /> Download PDF Report
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
